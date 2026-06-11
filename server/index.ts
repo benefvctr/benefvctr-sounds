@@ -17,6 +17,7 @@ const WEB = join(ROOT, 'web');
 const PORT = Number(process.env.PORT) || 3000;
 const CHANNEL = process.env.TWITCH_CHANNEL || '';
 const DIRECTOR_KEY = process.env.DIRECTOR_KEY || '';
+const BOOT_TIME = new Date().toISOString();
 
 // Last-resort safety net: log and keep serving rather than letting any stray
 // error or rejected promise terminate a live stream's game server.
@@ -122,6 +123,10 @@ const server = createServer(async (req, res) => {
 
   // --- API ---
   if (path === '/api/state') return json(res, 200, engine.snapshot());
+  // Render injects RENDER_GIT_COMMIT — surfacing it makes "what's actually
+  // deployed?" a one-click question instead of a guessing game.
+  if (path === '/api/version')
+    return json(res, 200, { commit: process.env.RENDER_GIT_COMMIT ?? 'local', startedAt: BOOT_TIME });
   if (path === '/api/config')
     return json(res, 200, { channel: CHANNEL || null, mock: !CHANNEL, costs: CONFIG.costs, rarityColors: RARITY_COLOR });
   if (path === '/api/leaderboard') {
@@ -179,6 +184,7 @@ server.on('upgrade', (req, socket, head) => {
 server.listen(PORT, () => {
   console.log('');
   console.log('  ███ NIGHT SHIFT ███');
+  console.log(`  build      ${(process.env.RENDER_GIT_COMMIT ?? 'local').slice(0, 7)}`);
   console.log(`  companion  http://localhost:${PORT}/`);
   console.log(`  overlay    http://localhost:${PORT}/overlay   (OBS browser source, 1920x1080)`);
   console.log(`  director   http://localhost:${PORT}/director`);
