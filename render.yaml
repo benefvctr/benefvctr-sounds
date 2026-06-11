@@ -11,9 +11,7 @@ services:
     name: night-shift
     runtime: node
     plan: free                 # always-on? switch to "starter" (~$7/mo) to kill cold starts
-    # The app lives on this branch until you merge it to main. Point the
-    # blueprint at whichever branch holds the code.
-    branch: claude/fable-5-0-model-5e2h88
+    branch: main
     buildCommand: npm install
     startCommand: npm start
     autoDeploy: true           # redeploy on every push to the branch above
