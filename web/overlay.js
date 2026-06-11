@@ -10,7 +10,10 @@ const SOUNDS = {
 };
 
 function connect() {
-  const ws = new WebSocket(`ws://${location.host}/ws`);
+  // Match the page's protocol: wss:// on HTTPS (Render), ws:// on local http.
+  // A hardcoded ws:// is blocked as mixed content on an HTTPS page.
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(`${proto}://${location.host}/ws`);
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);
     if (msg.type === 'state') render(msg.state);
