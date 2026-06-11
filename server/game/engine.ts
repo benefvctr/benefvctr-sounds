@@ -40,9 +40,11 @@ interface ActiveVote {
 }
 
 export interface EngineEvent {
-  type: 'sound' | 'pulse';
+  type: 'sound' | 'pulse' | 'announce';
   sound?: 'health' | 'shield' | 'bomb';
   pulse?: 'death' | 'extract' | 'curse' | 'bless';
+  /** Center-screen stinger on the overlay. */
+  announce?: { text: string; sub?: string; tone: 'spooky' | 'danger' | 'good' };
 }
 
 const DEATH_LINES = [
@@ -108,6 +110,10 @@ export class Engine {
     if (this.feed.length > 14) this.feed = this.feed.slice(-14);
   }
 
+  private announce(text: string, sub: string | undefined, tone: 'spooky' | 'danger' | 'good'): void {
+    this.onEvent({ type: 'announce', announce: { text, sub, tone } });
+  }
+
   // ---------------------------------------------------------------- tick
   private tick(): void {
     const now = Date.now();
@@ -149,6 +155,7 @@ export class Engine {
     const deck = [...ROOMS].sort(() => this.rng() - 0.5);
     this.rooms = deck.slice(0, CONFIG.roomsPerShift);
     this.say('system', `SHIFT #${this.raidId} — doors open. Type !deploy to clock in for the night.`);
+    this.announce(`SHIFT #${this.raidId}`, 'DOORS OPEN — !deploy TO ENTER', 'spooky');
   }
 
   private beginShift(): void {
@@ -168,6 +175,7 @@ export class Engine {
     const room = this.rooms[i];
     this.endsAt = Date.now() + CONFIG.roomSec * 1000;
     this.say('info', `▸ ${room.name}: ${room.intro}`);
+    this.announce(room.name.toUpperCase(), `ROOM ${i + 1} OF ${this.rooms.length}`, 'spooky');
     if (room.vote) {
       this.vote = {
         prompt: room.vote.prompt,
@@ -230,13 +238,18 @@ export class Engine {
       store.markDirty(player.name);
       this.say('extract', `${r.display} EXTRACTED — haul ${r.haul}cr (+${CONFIG.extractBonus}cr bonus)`);
     }
+    const out = [...this.raiders.values()].filter((r) => r.alive).length;
+    if (out > 0) this.announce('EXTRACTION COMPLETE', `${out} EMPLOYEE(S) RETURNED TO THE SURFACE`, 'good');
     this.onEvent({ type: 'pulse', pulse: 'extract' });
     this.finishShift();
   }
 
   private finishShift(): void {
     const survivors = [...this.raiders.values()].filter((r) => r.alive);
-    if (survivors.length === 0) this.say('death', 'Total loss. The facility logs the shift as "productive".');
+    if (survivors.length === 0) {
+      this.say('death', 'Total loss. The facility logs the shift as "productive".');
+      if (this.raiders.size > 0) this.announce('TOTAL LOSS', 'THE FACILITY LOGS THE SHIFT AS PRODUCTIVE', 'danger');
+    }
     store.recordRaid({
       id: this.raidId,
       startedAt: this.startedAt,
@@ -273,6 +286,7 @@ export class Engine {
         }
         this.say('death', `✖ ${r.display} ${r.deathLine}. Gear and ${r.haul}cr of loot — gone.`);
         this.onEvent({ type: 'pulse', pulse: 'death' });
+        this.announce(`✖ ${r.display}`, r.deathLine.toUpperCase(), 'danger');
       }
     }
   }
@@ -445,6 +459,7 @@ export class Engine {
     this.shiftLoot *= 1.5;
     this.say('danger', `💣 ${by} drops a charge into the shift. Walls open. So do other things.`);
     this.onEvent({ type: 'sound', sound: 'bomb' });
+    this.announce('STRUCTURAL BREACH', `${by.toUpperCase()} DROPPED A CHARGE — DANGER RISES. SO DOES THE LOOT.`, 'danger');
   }
 
   // ---------------------------------------------------------------- director
@@ -459,6 +474,7 @@ export class Engine {
         this.shiftDanger *= 0.6;
         for (const r of this.raiders.values()) if (r.alive) r.wounded = false;
         this.say('system', 'THE BENEFACTOR SMILES. Wounds close. The dark steps back.');
+        this.announce('THE BENEFACTOR SMILES', 'WOUNDS CLOSE. THE DARK STEPS BACK.', 'good');
         this.onEvent({ type: 'pulse', pulse: 'bless' });
         this.onEvent({ type: 'sound', sound: 'health' });
         return true;
@@ -466,6 +482,7 @@ export class Engine {
         if (this.phase !== 'room' && this.phase !== 'extraction') return false;
         this.shiftDanger *= 1.6;
         this.say('system', 'THE BENEFACTOR FROWNS. The lights dim by exactly one secret.');
+        this.announce('THE BENEFACTOR FROWNS', 'THE LIGHTS DIM BY EXACTLY ONE SECRET', 'danger');
         this.onEvent({ type: 'pulse', pulse: 'curse' });
         return true;
       case 'bomb':

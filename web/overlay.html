@@ -78,8 +78,15 @@
   #status .bar { height: 4px; background: rgba(255,180,84,0.15); margin-top: 10px; }
   #status .bar i { display: block; height: 100%; background: var(--amber); transition: width 1s linear; }
 
-  #feed { flex: 1; padding: 14px 20px; font-size: 17px; letter-spacing: 0.5px; display: flex; flex-direction: column; justify-content: flex-end; }
-  #feed .line { padding: 3px 0; opacity: 0.55; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #feed {
+    flex: 1; padding: 12px 20px; font-size: 16px; letter-spacing: 0.5px;
+    display: flex; flex-direction: column; justify-content: flex-end;
+    overflow: hidden; max-height: 190px;
+    /* old lines fade out at the top instead of being chopped mid-letter */
+    mask-image: linear-gradient(to bottom, transparent 4px, black 36px);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 4px, black 36px);
+  }
+  #feed .line { padding: 2px 0; opacity: 0.55; white-space: normal; line-height: 1.3; }
   #feed .line:last-child { opacity: 1; color: #fff; }
   #feed .line.death { color: var(--red); opacity: 1; }
   #feed .line.loot { color: var(--green); }
@@ -98,6 +105,28 @@
   .chip.wounded { color: var(--red); border-color: var(--red); }
   .chip.shield { box-shadow: 0 0 8px rgba(95,183,255,0.8); border-color: var(--blue); }
   .chip .haul { color: var(--green); margin-left: 6px; }
+
+  /* ---------- center-screen event stingers ---------- */
+  #announce {
+    position: absolute; left: 50%; top: 34%; transform: translate(-50%, -50%);
+    text-align: center; pointer-events: none; opacity: 0; max-width: 1100px;
+  }
+  #announce .big {
+    font-size: 58px; font-weight: bold; letter-spacing: 10px; color: #fff;
+    text-shadow: 0 0 18px rgba(255, 180, 84, 0.7), 0 0 60px rgba(255, 180, 84, 0.35);
+  }
+  #announce .sub { font-size: 17px; letter-spacing: 4px; opacity: 0.75; margin-top: 10px; }
+  #announce.danger .big { color: var(--red); text-shadow: 0 0 18px rgba(255, 79, 79, 0.8), 0 0 70px rgba(255, 79, 79, 0.4); }
+  #announce.good .big { color: var(--green); text-shadow: 0 0 18px rgba(109, 255, 166, 0.8), 0 0 70px rgba(109, 255, 166, 0.4); }
+  #announce.show { animation: stinger 2.6s ease-out forwards; }
+  @keyframes stinger {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(1.06); }
+    6% { opacity: 1; }
+    9% { opacity: 0.15; }   /* CRT flicker on the way in */
+    13% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    72% { opacity: 1; }
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(0.98); }
+  }
 
   /* ---------- vote panel ---------- */
   #vote {
@@ -122,6 +151,8 @@
 </head>
 <body>
   <div id="pulse"></div>
+
+  <div id="announce"><div class="big"></div><div class="sub"></div></div>
 
   <div id="idle" class="panel">
     NIGHT SHIFT // NEXT SHIFT <b id="countdown">--:--</b>

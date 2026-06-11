@@ -23,7 +23,35 @@ function connect() {
 }
 connect();
 
+// Center-screen stingers play one at a time so simultaneous events
+// (e.g. two deaths in the same room) don't clobber each other.
+const announceQueue = [];
+let announcing = false;
+
+function showAnnounce(a) {
+  announceQueue.push(a);
+  if (announceQueue.length > 4) announceQueue.shift(); // don't backlog forever
+  if (!announcing) nextAnnounce();
+}
+
+function nextAnnounce() {
+  const a = announceQueue.shift();
+  if (!a) {
+    announcing = false;
+    return;
+  }
+  announcing = true;
+  const el = $('announce');
+  el.querySelector('.big').textContent = a.text;
+  el.querySelector('.sub').textContent = a.sub || '';
+  el.className = a.tone || 'spooky';
+  void el.offsetWidth; // restart the CSS animation
+  el.classList.add('show');
+  setTimeout(nextAnnounce, 2700);
+}
+
 function handleEvent(ev) {
+  if (ev.type === 'announce' && ev.announce) showAnnounce(ev.announce);
   if (ev.type === 'sound' && SOUNDS[ev.sound]) {
     SOUNDS[ev.sound].currentTime = 0;
     SOUNDS[ev.sound].play().catch(() => {}); // OBS allows autoplay; browsers may not until a click
@@ -73,7 +101,7 @@ function render(s) {
   // feed
   const feed = $('feed');
   feed.innerHTML = s.feed
-    .slice(-6)
+    .slice(-8)
     .map((f) => `<div class="line ${f.kind}">${escapeHtml(f.text)}</div>`)
     .join('');
 
