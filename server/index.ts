@@ -18,16 +18,27 @@ const PORT = Number(process.env.PORT) || 3000;
 const CHANNEL = process.env.TWITCH_CHANNEL || '';
 const DIRECTOR_KEY = process.env.DIRECTOR_KEY || '';
 
+// Last-resort safety net: log and keep serving rather than letting any stray
+// error or rejected promise terminate a live stream's game server.
+process.on('uncaughtException', (err) => console.error('[fatal] uncaughtException:', err));
+process.on('unhandledRejection', (err) => console.error('[fatal] unhandledRejection:', err));
+
 await store.init();
 const engine = new Engine();
 engine.start();
 
 // ---------------------------------------------------------------- chat in
+// Chat is untrusted input from live viewers. A throw here must never escape to
+// crash the process, so every message is handled defensively.
 const onChat = (login: string, display: string, msg: string) => {
-  engine.handleChat(login, display, msg);
-  // Leak non-command chatter to the companion site's "haunt" layer.
-  // The facility is listening.
-  if (!msg.startsWith('!')) broadcast({ type: 'chat', display, text: msg.slice(0, 140) });
+  try {
+    engine.handleChat(login, display, msg);
+    // Leak non-command chatter to the companion site's "haunt" layer.
+    // The facility is listening.
+    if (!msg.startsWith('!')) broadcast({ type: 'chat', display, text: msg.slice(0, 140) });
+  } catch (err) {
+    console.error('[chat] handler error for', login, '-', err);
+  }
 };
 if (CHANNEL) {
   connectTwitch(CHANNEL, onChat);

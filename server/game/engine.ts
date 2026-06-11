@@ -91,7 +91,15 @@ export class Engine {
   onEvent: (ev: EngineEvent) => void = () => {};
 
   start(): void {
-    setInterval(() => this.tick(), 1000);
+    // A thrown error inside a timer is an uncaught exception that would kill
+    // the whole process — never let one bad tick take down the server.
+    setInterval(() => {
+      try {
+        this.tick();
+      } catch (err) {
+        console.error('[engine] tick error:', err);
+      }
+    }, 1000);
   }
 
   // ---------------------------------------------------------------- feed
