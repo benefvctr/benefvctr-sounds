@@ -78,10 +78,18 @@ function json(res: import('node:http').ServerResponse, code: number, body: unkno
   res.end(JSON.stringify(body));
 }
 
+// HTML/JS/CSS change as the game is iterated, so never let a browser (or OBS's
+// embedded Chromium) serve a stale copy. Static media can cache normally.
+const NO_STORE = new Set(['.html', '.js', '.css']);
+
 async function serveFile(res: import('node:http').ServerResponse, path: string): Promise<void> {
   try {
     const data = await readFile(path);
-    res.writeHead(200, { 'content-type': MIME[extname(path)] ?? 'application/octet-stream' });
+    const ext = extname(path);
+    res.writeHead(200, {
+      'content-type': MIME[ext] ?? 'application/octet-stream',
+      'cache-control': NO_STORE.has(ext) ? 'no-store, must-revalidate' : 'public, max-age=3600',
+    });
     res.end(data);
   } catch {
     res.writeHead(404);
