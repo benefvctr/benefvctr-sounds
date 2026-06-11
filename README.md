@@ -113,14 +113,34 @@ if the anon key leaks.
 ## Deploying
 
 This is a stateful WebSocket server, so it wants a long-running host, not a
-static/serverless one:
+static/serverless one. The overlay, companion, and director pages are all
+served by the one Node process, so a single service is the whole deployment.
 
-- **Render** — Web Service, build `npm install`, start `npm start`. Set the env
-  vars above. The overlay, companion, and director pages are all served by this
-  one service, so a single Render service is the whole deployment.
-- **Netlify** — best as a CDN in front (custom domain, the companion site), but
-  the realtime server itself should run on Render. Don't try to host the WS
-  server on Netlify Functions.
+### Render (one-click via Blueprint)
+
+`render.yaml` at the repo root describes the service. In Render: **New →
+Blueprint → pick this repo**. Render then prompts you for the four values (all
+kept out of git because this repo is public):
+
+| Prompt | What to enter |
+|---|---|
+| `TWITCH_CHANNEL` | your channel login |
+| `SUPABASE_URL` | `https://qqbgwrkyqvdfkhqpmvan.supabase.co` |
+| `SUPABASE_SERVICE_KEY` | the **service_role** key from Supabase → Settings → API Keys |
+| `DIRECTOR_KEY` | any string — locks `/director` to you |
+
+The blueprint tracks the branch named in `render.yaml` (currently the feature
+branch); point it at `main` once you merge. It defaults to the **free** plan,
+which sleeps after 15 min of no traffic — fine here, since nothing is lost while
+asleep (income is timestamp-based and pending state is flushed on shutdown) and
+viewer connections keep it awake during a stream. Bump `plan` to `starter` to
+remove cold starts entirely.
+
+### Netlify
+
+Best as a CDN/custom domain in front of the companion site, but the realtime
+server itself should run on Render — don't host the WebSocket server on Netlify
+Functions.
 
 ## Architecture
 
