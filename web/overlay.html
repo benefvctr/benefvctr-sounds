@@ -13,6 +13,12 @@
     --blue: #5fb7ff;
     --ink: rgba(8, 9, 12, 0.88);
     --line: rgba(255, 180, 84, 0.35);
+    /* Layout knobs — tweak these to fit your scene:
+       --cam-clear : empty space kept on the bottom-RIGHT for your facecam.
+                     Increase if the squad panel still touches your camera.
+       --vote-width: width of the vote/decision box (now anchored bottom-left). */
+    --cam-clear: 540px;
+    --vote-width: 520px;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { width: 1920px; height: 1080px; overflow: hidden; background: transparent; }
@@ -58,7 +64,8 @@
 
   /* ---------- lower third (active shift) ---------- */
   #hud {
-    position: absolute; left: 36px; right: 36px; bottom: 36px;
+    /* Stops short of the right edge so it never covers the facecam. */
+    position: absolute; left: 36px; right: var(--cam-clear); bottom: 36px;
     display: none; gap: 16px;
   }
   #hud.show, #idle.show { display: flex; }
@@ -94,22 +101,23 @@
 
   /* ---------- vote panel ---------- */
   #vote {
-    position: absolute; left: 50%; transform: translateX(-50%); bottom: 240px;
-    width: 760px; padding: 22px 26px; display: none; text-align: center;
+    /* Anchored bottom-left above the status panel, sized by --vote-width. */
+    position: absolute; left: 36px; bottom: 250px;
+    width: var(--vote-width); padding: 16px 18px; display: none; text-align: center;
   }
   #vote.show { display: block; }
-  #vote .prompt { font-size: 21px; color: #fff; letter-spacing: 1px; margin-bottom: 16px; }
-  #vote .opts { display: flex; gap: 18px; }
+  #vote .prompt { font-size: 17px; color: #fff; letter-spacing: 1px; margin-bottom: 12px; }
+  #vote .opts { display: flex; gap: 14px; }
   .opt { flex: 1; }
-  .opt .word { font-size: 30px; font-weight: bold; letter-spacing: 4px; }
+  .opt .word { font-size: 24px; font-weight: bold; letter-spacing: 3px; }
   .opt.a .word { color: var(--amber); } .opt.b .word { color: var(--blue); }
-  .opt .label { font-size: 13px; opacity: 0.75; margin: 4px 0 8px; }
-  .opt .bar { height: 14px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; }
+  .opt .label { font-size: 12px; opacity: 0.75; margin: 3px 0 6px; }
+  .opt .bar { height: 12px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; }
   .opt.a .bar i { background: var(--amber); } .opt.b .bar i { background: var(--blue); }
   .opt .bar i { display: block; height: 100%; width: 0%; transition: width 0.6s ease; }
-  .opt .count { font-size: 17px; margin-top: 5px; color: #fff; }
-  #vote .vtimer { margin-top: 12px; font-size: 15px; letter-spacing: 3px; }
-  #vote .hint { font-size: 12px; opacity: 0.6; margin-top: 6px; letter-spacing: 2px; }
+  .opt .count { font-size: 15px; margin-top: 4px; color: #fff; }
+  #vote .vtimer { margin-top: 10px; font-size: 13px; letter-spacing: 3px; }
+  #vote .hint { font-size: 11px; opacity: 0.6; margin-top: 5px; letter-spacing: 1px; }
 </style>
 </head>
 <body>
