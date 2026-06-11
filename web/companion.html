@@ -77,6 +77,37 @@
   .modname .lvl { color: var(--amber); float: right; font-size: 12px; }
   .modcost { font-size: 12px; color: var(--blue); margin-top: 6px; }
 
+  /* ---------- facility map ---------- */
+  .wingrow {
+    display: grid; grid-template-columns: 230px 1fr 240px; gap: 14px;
+    border: 1px solid rgba(255,255,255,0.07); border-left: 3px solid var(--line);
+    border-radius: 3px; padding: 12px 14px; margin-bottom: 8px; position: relative;
+  }
+  @media (max-width: 800px) { .wingrow { grid-template-columns: 1fr; } }
+  .wingrow.tonight { border-color: var(--amber); border-left-color: var(--amber); background: rgba(255,180,84,0.05); }
+  .wingrow .depth { position: absolute; left: -3px; top: -1px; bottom: -1px; width: 3px; }
+  .wingname { color: #fff; letter-spacing: 2px; font-size: 14px; text-transform: uppercase; }
+  .wingname .badge { display: inline-block; font-size: 9px; letter-spacing: 2px; background: var(--amber); color: #000; padding: 2px 6px; border-radius: 2px; margin-left: 8px; vertical-align: 2px; animation: blink 1.4s steps(2) infinite; }
+  .wingtag { font-size: 11px; opacity: 0.55; font-style: italic; margin-top: 4px; }
+  .wingents { font-size: 11px; margin-top: 8px; color: var(--red); opacity: 0.8; }
+  .wingrooms { display: flex; flex-wrap: wrap; gap: 5px; align-content: flex-start; }
+  .roomchip { font-size: 11px; border: 1px solid rgba(255,255,255,0.1); border-radius: 2px; padding: 2px 7px; opacity: 0.75; }
+  .roomchip.vote { border-color: rgba(95,183,255,0.45); color: var(--blue); }
+  .meters { font-size: 11px; }
+  .meters .mrow { display: grid; grid-template-columns: 52px 1fr 86px; gap: 8px; align-items: center; margin-bottom: 6px; }
+  .meters .mlabel { letter-spacing: 1px; opacity: 0.55; text-transform: uppercase; }
+  .meters .mbar { height: 7px; background: rgba(255,255,255,0.07); border-radius: 2px; overflow: hidden; }
+  .meters .mbar i { display: block; height: 100%; }
+  .meters .tier { text-align: right; letter-spacing: 1px; }
+
+  /* ---------- copy-to-chat buttons ---------- */
+  .copy {
+    cursor: pointer; border: 1px solid rgba(95,183,255,0.4); color: var(--blue); background: transparent;
+    font-family: inherit; font-size: 11px; padding: 2px 8px; border-radius: 2px; margin-left: 6px;
+  }
+  .copy:hover { background: rgba(95,183,255,0.12); }
+  .copy.ok { color: var(--green); border-color: var(--green); }
+
   /* ---------- the haunt layer: live chat bleeding through the page ---------- */
   #ghosts { position: fixed; inset: 0; pointer-events: none; z-index: 50; overflow: hidden; }
   .wrap { position: relative; z-index: 1; }
@@ -127,16 +158,21 @@
       <section>
         <h2>// Field Manual</h2>
         <table class="cmds">
-          <tr><td>!clockin</td><td>Enroll. 100cr signing bonus + a penlight.</td></tr>
-          <tr><td>!deploy</td><td>Join the next shift while doors are open. Your best light source is auto-carried — and lost if you die.</td></tr>
+          <tr><td>!clockin <button class="copy" data-copy="!clockin">⧉</button></td><td>Enroll. 100cr signing bonus + a penlight.</td></tr>
+          <tr><td>!deploy <button class="copy" data-copy="!deploy">⧉</button></td><td>Join the next shift while doors are open. Your best light source is auto-carried — and lost if you die.</td></tr>
           <tr><td>VOTE WORDS</td><td>During events, type the shown word in chat. Everyone votes, raider or not.</td></tr>
-          <tr><td>!heal [name]</td><td id="costheal">Patch up a wounded raider.</td></tr>
-          <tr><td>!shield [name]</td><td id="costshield">Block the next hit on a raider.</td></tr>
-          <tr><td>!bomb</td><td id="costbomb">Sabotage the shift: more danger, more loot. Chaos.</td></tr>
+          <tr><td>!heal [name] <button class="copy" data-copy="!heal">⧉</button></td><td id="costheal">Patch up a wounded raider.</td></tr>
+          <tr><td>!shield [name] <button class="copy" data-copy="!shield">⧉</button></td><td id="costshield">Block the next hit on a raider.</td></tr>
+          <tr><td>!bomb <button class="copy" data-copy="!bomb">⧉</button></td><td id="costbomb">Sabotage the shift: more danger, more loot. Chaos.</td></tr>
         </table>
         <p class="muted" style="margin-top:12px">Extract to keep loot + bonus. Die and you lose everything you carried. The Benefactor thanks you for your flexibility.</p>
       </section>
     </div>
+
+    <section class="full">
+      <h2>// Facility Directory <span class="muted">(one wing is assigned per shift — hazard pay scales with depth)</span></h2>
+      <div id="map"></div>
+    </section>
 
     <section class="full">
       <h2>// Asset Leaderboard <span class="muted">(net worth: credits + stash)</span></h2>

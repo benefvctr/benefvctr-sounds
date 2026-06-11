@@ -31,6 +31,7 @@ export interface PlayerRecord {
 export interface RaidRecord {
   id: number;
   startedAt: number;
+  wing?: string; // tonight's assigned wing (absent on records from older builds)
   rooms: string[];
   raiders: { name: string; survived: boolean; haul: number }[];
 }

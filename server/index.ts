@@ -11,6 +11,7 @@ import { connectTwitch, startMockChat } from './twitch.js';
 import * as store from './store.js';
 import { ITEM_BY_ID, RARITY_COLOR } from './game/items.js';
 import { publicHideout } from './game/hideout.js';
+import { WINGS, hazardTier } from './game/rooms.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const WEB = join(ROOT, 'web');
@@ -142,9 +143,25 @@ const server = createServer(async (req, res) => {
     return p ? json(res, 200, publicPlayer(p)) : json(res, 404, { error: 'not clocked in' });
   }
   if (path === '/api/raids') return json(res, 200, store.recentRaids());
+  if (path === '/api/map') {
+    return json(res, 200, {
+      wings: WINGS.map((w) => ({
+        id: w.id,
+        name: w.name,
+        tag: w.tag,
+        danger: w.danger,
+        loot: w.loot,
+        tier: hazardTier(w.danger),
+        entities: w.entities.map((e) => e.name),
+        rooms: w.rooms.map((r) => ({ name: r.name, vote: !!r.vote })),
+      })),
+      tonight: engine.phase !== 'idle' && engine.wing ? engine.wing.id : null,
+    });
+  }
   if (path.startsWith('/api/director/') && req.method === 'POST') {
     if (DIRECTOR_KEY && url.searchParams.get('key') !== DIRECTOR_KEY) return json(res, 403, { error: 'bad key' });
-    const ok = engine.director(path.slice('/api/director/'.length));
+    const arg = url.searchParams.has('sec') ? Number(url.searchParams.get('sec')) : undefined;
+    const ok = engine.director(path.slice('/api/director/'.length), arg);
     return json(res, ok ? 200 : 409, { ok });
   }
 

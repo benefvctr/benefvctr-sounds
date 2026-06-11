@@ -14,6 +14,7 @@ async function init() {
   $('costbomb').textContent = `Sabotage the shift: more danger, more loot. (${cfg.costs.bomb}cr)`;
   if (cfg.mock) $('livetext').textContent = 'MOCK CHAT';
   connect();
+  renderMap();
   refreshBoards();
   setInterval(refreshBoards, 8000);
 }
@@ -39,17 +40,80 @@ function renderLive(s) {
   const haul = s.raiders.reduce((a, r) => a + (r.alive ? r.haul : 0), 0);
   $('shiftstats').innerHTML = [
     stat(s.phase.toUpperCase(), 'phase'),
+    s.wing ? stat(s.wing.name, `tonight · hazard ${s.wing.tier}`) : '',
     stat(fmt(s.secondsLeft), live ? 'time left' : 'until doors'),
     stat(`${alive}/${s.raiders.length}`, 'alive'),
     stat(`${haul}cr`, 'haul at stake'),
     s.vote ? stat(`${s.vote.a.word} ${s.vote.a.count}–${s.vote.b.count} ${s.vote.b.word}`, 'live vote') : '',
   ].join('');
+  // keep the map's TONIGHT badge in sync with the live shift
+  if (s.wing?.id !== lastTonight) {
+    lastTonight = s.wing?.id ?? null;
+    renderMap();
+  }
 
   $('feedbox').innerHTML = s.feed.map((f) => `<div class="${f.kind}">${esc(f.text)}</div>`).join('');
 }
 
 const stat = (v, l) => `<div class="stat"><b>${esc(v)}</b><span>${esc(l)}</span></div>`;
 const fmt = (sec) => `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
+
+// ---------------------------------------------------------------- facility map
+let mapData = null;
+let lastTonight = null;
+
+const TIER_COLOR = { LOW: '#7fd47f', STANDARD: '#d8d3c8', ELEVATED: '#ffb454', SEVERE: '#ff8a4f', CATASTROPHIC: '#ff4f4f' };
+
+async function renderMap() {
+  if (!mapData) {
+    try {
+      mapData = await fetch('/api/map').then((r) => r.json());
+    } catch {
+      return;
+    }
+  }
+  const tonight = lastTonight;
+  $('map').innerHTML = mapData.wings
+    .map((w) => {
+      const dangerPct = Math.min(100, (w.danger / 1.8) * 100);
+      const lootPct = Math.min(100, (w.loot / 2.2) * 100);
+      const tcolor = TIER_COLOR[w.tier] ?? '#fff';
+      return `<div class="wingrow ${w.id === tonight ? 'tonight' : ''}">
+        <div>
+          <div class="wingname">${esc(w.name)}${w.id === tonight ? '<span class="badge">TONIGHT</span>' : ''}</div>
+          <div class="wingtag">${esc(w.tag)}</div>
+          <div class="wingents">residents: ${esc(w.entities.join(' · '))}</div>
+        </div>
+        <div class="wingrooms">${w.rooms.map((r) => `<span class="roomchip ${r.vote ? 'vote' : ''}">${esc(r.name)}</span>`).join('')}</div>
+        <div class="meters">
+          <div class="mrow"><span class="mlabel">hazard</span><span class="mbar"><i style="width:${dangerPct}%;background:${tcolor}"></i></span><span class="tier" style="color:${tcolor}">${esc(w.tier)}</span></div>
+          <div class="mrow"><span class="mlabel">yield</span><span class="mbar"><i style="width:${lootPct}%;background:var(--green)"></i></span><span class="tier" style="color:var(--green)">×${w.loot.toFixed(2)}</span></div>
+          <div class="mlabel" style="margin-top:4px">◆ blue rooms put a vote on screen</div>
+        </div>
+      </div>`;
+    })
+    .join('');
+}
+
+// ---------------------------------------------------------------- copy to chat
+function copyBtn(text) {
+  return `<button class="copy" data-copy="${esc(text)}">⧉ copy</button>`;
+}
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.copy');
+  if (!btn) return;
+  try {
+    await navigator.clipboard.writeText(btn.dataset.copy);
+    const prev = btn.textContent;
+    btn.textContent = '✓ copied';
+    btn.classList.add('ok');
+    setTimeout(() => {
+      btn.textContent = prev;
+      btn.classList.remove('ok');
+    }, 1500);
+  } catch {}
+});
 
 async function refreshBoards() {
   const [board, raids] = await Promise.all([
@@ -81,7 +145,7 @@ async function refreshBoards() {
     .map((r) => {
       const survived = r.raiders.filter((x) => x.survived).length;
       return `<tr>
-        <td>#${r.id}</td><td class="muted">${esc(r.rooms.join(' → '))}</td>
+        <td>#${r.id}</td><td class="muted">${r.wing ? `<span style="color:var(--amber)">${esc(r.wing)}</span> — ` : ''}${esc(r.rooms.join(' → '))}</td>
         <td>${r.raiders.map((x) => `<span class="${x.survived ? '' : 'dead'}">${esc(x.name)}</span>`).join(', ')}</td>
         <td class="num">${survived}/${r.raiders.length}</td>
       </tr>`;
@@ -129,14 +193,14 @@ function renderPlayer() {
         <div class="pending" id="pending">+${h.pending}cr</div>
       </div>
       <div class="pbar"><i style="width:${Math.min(100, (h.pending / h.cap) * 100)}%"></i></div>
-      <div class="muted" style="margin:6px 0 12px">Type <b style="color:var(--amber)">!collect</b> in chat to bank it. ${h.pending >= h.cap ? '<b style="color:var(--red)">VAULT FULL — overflow is wasted.</b>' : ''}</div>
+      <div class="muted" style="margin:6px 0 12px">Type <b style="color:var(--amber)">!collect</b> in chat to bank it. ${copyBtn('!collect')} ${h.pending >= h.cap ? '<b style="color:var(--red)">VAULT FULL — overflow is wasted.</b>' : ''}</div>
       <div class="modgrid">
         ${h.modules
           .map(
             (m) => `<div class="mod">
               <div class="modname">${esc(m.name)} <span class="lvl">L${m.level}${m.level >= m.max ? ' MAX' : ''}</span></div>
               <div class="flavor">${esc(m.blurb)}</div>
-              <div class="modcost">${m.nextCost === null ? 'maxed' : `!upgrade ${m.id} <span class="muted">(${m.nextCost}cr)</span>`}</div>
+              <div class="modcost">${m.nextCost === null ? 'maxed' : `!upgrade ${m.id} <span class="muted">(${m.nextCost}cr)</span> ${copyBtn(`!upgrade ${m.id}`)}`}</div>
             </div>`,
           )
           .join('')}

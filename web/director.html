@@ -19,6 +19,13 @@
   #msg { min-height: 22px; font-size: 13px; letter-spacing: 1px; color: #6dffa6; }
   #msg.err { color: #ff4f4f; }
   input { width: 100%; background: #06070a; border: 1px solid rgba(255,180,84,0.35); color: #fff; padding: 10px; font-family: inherit; margin-bottom: 20px; border-radius: 3px; }
+  .section { border: 1px solid rgba(255,180,84,0.25); border-radius: 4px; padding: 14px; margin-bottom: 18px; }
+  .section h2 { color: #ffb454; font-size: 13px; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 12px; }
+  .section h2 small { float: right; color: #6dffa6; letter-spacing: 1px; text-transform: none; }
+  .row { display: flex; gap: 8px; margin-bottom: 10px; }
+  .row input { margin-bottom: 0; }
+  button.mini { width: auto; flex: 1; margin-bottom: 0; padding: 10px 6px; font-size: 12px; letter-spacing: 1px; }
+  .note { opacity: 0.5; font-size: 11px; margin-bottom: 0; }
 </style>
 </head>
 <body>
@@ -26,6 +33,23 @@
     <h1>Director Console</h1>
     <p>Streamer-only controls. If DIRECTOR_KEY is set on the server, enter it below. Keep this page off-stream.</p>
     <input type="password" id="key" placeholder="director key (if configured)" />
+
+    <div class="section">
+      <h2>Shift Schedule <small id="curint">current: …</small></h2>
+      <div class="row">
+        <button class="mini" data-sec="0">Back-to-back</button>
+        <button class="mini" data-sec="60">1 min</button>
+        <button class="mini" data-sec="120">2 min</button>
+        <button class="mini" data-sec="300">5 min</button>
+        <button class="mini" data-sec="600">10 min</button>
+      </div>
+      <div class="row">
+        <input type="number" id="custmin" min="0" max="60" step="0.5" placeholder="custom minutes" />
+        <button class="mini" id="setcust">Set</button>
+      </div>
+      <p class="note">Time between shifts. Back-to-back reopens the doors right after results — if a lobby gets no deploys, it waits 60s before trying again.</p>
+    </div>
+
     <button data-act="start">Open the Doors <small>Force a shift lobby to open right now</small></button>
     <button data-act="bless">Bless the Shift <small>Heal all wounds, danger ×0.6 for the rest of the shift</small></button>
     <button data-act="curse">Curse the Shift <small>Danger ×1.6 — the Benefactor frowns</small></button>
@@ -34,15 +58,32 @@
   </div>
   <script>
     const msg = document.getElementById('msg');
-    document.querySelectorAll('button').forEach((b) =>
-      b.addEventListener('click', async () => {
-        const key = document.getElementById('key').value;
-        const res = await fetch(`/api/director/${b.dataset.act}?key=${encodeURIComponent(key)}`, { method: 'POST' });
-        const ok = res.ok;
-        msg.className = ok ? '' : 'err';
-        msg.textContent = ok ? `✓ ${b.dataset.act} executed` : res.status === 403 ? '✗ bad key' : '✗ not possible right now (wrong phase?)';
-      }),
-    );
+    const key = () => encodeURIComponent(document.getElementById('key').value);
+
+    async function call(action, params = '') {
+      const res = await fetch(`/api/director/${action}?key=${key()}${params}`, { method: 'POST' });
+      msg.className = res.ok ? '' : 'err';
+      msg.textContent = res.ok ? `✓ ${action} executed` : res.status === 403 ? '✗ bad key' : '✗ not possible right now (wrong phase?)';
+      if (res.ok) refreshInterval();
+      return res.ok;
+    }
+
+    document.querySelectorAll('button[data-act]').forEach((b) => b.addEventListener('click', () => call(b.dataset.act)));
+    document.querySelectorAll('button[data-sec]').forEach((b) => b.addEventListener('click', () => call('interval', `&sec=${b.dataset.sec}`)));
+    document.getElementById('setcust').addEventListener('click', () => {
+      const min = parseFloat(document.getElementById('custmin').value);
+      if (Number.isFinite(min)) call('interval', `&sec=${Math.round(min * 60)}`);
+    });
+
+    async function refreshInterval() {
+      try {
+        const s = await fetch('/api/state').then((r) => r.json());
+        const el = document.getElementById('curint');
+        el.textContent = `current: ${s.intervalSec === 0 ? 'back-to-back' : s.intervalSec % 60 === 0 ? s.intervalSec / 60 + ' min' : s.intervalSec + 's'} · phase: ${s.phase}`;
+      } catch {}
+    }
+    refreshInterval();
+    setInterval(refreshInterval, 5000);
   </script>
 </body>
 </html>

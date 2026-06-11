@@ -22,7 +22,7 @@ Then:
 |---|---|
 | `http://localhost:3000/overlay` | **OBS browser source** (1920×1080, transparent) |
 | `http://localhost:3000/` | Companion site — stash lookup, leaderboard, shift archive |
-| `http://localhost:3000/director` | Streamer-only controls (bless / curse / bomb / open doors) |
+| `http://localhost:3000/director` | Streamer-only controls (bless / curse / bomb / open doors / shift schedule) |
 
 With no configuration it boots in **mock chat mode** — fake viewers enroll,
 deploy, vote, and sabotage so you can see the whole loop immediately.
@@ -37,8 +37,8 @@ TWITCH_CHANNEL=yourchannel npm run dev
 
 ## How it plays
 
-1. Every ~5 minutes a **shift opens**. Chat types `!deploy` to enter (first `!clockin` to enroll — 100cr + a penlight).
-2. The squad moves through 4 rooms of the facility. Some rooms put a **vote on screen** — anyone in chat can type the vote word, raider or not. Risky options = more danger, more loot.
+1. Every few minutes a **shift opens** and the facility assigns a **wing** — one of six, from the Surface Annex (hazard LOW) down to the Understructure (CATASTROPHIC, rare). Chat types `!deploy` to enter (first `!clockin` to enroll — 100cr + a penlight). Deeper wings hit harder and pay better; casualties are attributed to each wing's **resident entities** (the Floor Manager, the Thing in the Vents, the Below…). The full directory — rooms, residents, hazard/yield meters, tonight's live assignment — is on the companion site.
+2. The squad moves through 4 rooms drawn from that wing's pool (30+ rooms across the facility). Some rooms put a **vote on screen** — anyone in chat can type the vote word, raider or not. Risky options = more danger, more loot; some encounters are straight **FIGHT / FLEE** calls against a resident.
 3. Raiders get **wounded** on the first hit, die on the second. A carried light source lowers your odds of being hit — and is **lost forever if you die**.
 4. Survive the extraction sprint to bank your haul (+50cr bonus). Loot goes to your persistent stash.
 
@@ -82,7 +82,7 @@ credits on the table, which nudges them to invest and check back.
 |---|---|---|
 | `TWITCH_CHANNEL` | *(unset → mock chat)* | Channel to read chat from |
 | `PORT` | `3000` | HTTP/WS port |
-| `RAID_INTERVAL_SEC` | `300` | Downtime between shifts |
+| `RAID_INTERVAL_SEC` | `300` | Downtime between shifts (adjustable live from `/director`, incl. 0 = back-to-back; an empty lobby waits 60s before reopening) |
 | `LOBBY_SEC` | `45` | How long `!deploy` stays open |
 | `ROOM_SEC` | `24` | Seconds per room |
 | `ROOMS_PER_SHIFT` | `4` | Rooms per shift |

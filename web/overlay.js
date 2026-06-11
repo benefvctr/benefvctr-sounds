@@ -82,10 +82,11 @@ function render(s) {
 
   // status block
   $('shiftno').textContent = `SHIFT #${s.raidId}`;
+  const wing = s.wing ? s.wing.name.toUpperCase() : '';
   if (s.phase === 'lobby') {
-    $('roomname').textContent = 'DOORS OPEN — !deploy TO ENTER';
+    $('roomname').textContent = wing ? `${wing} — !deploy TO ENTER` : 'DOORS OPEN — !deploy TO ENTER';
   } else if (s.phase === 'room' && s.room) {
-    $('roomname').textContent = `ROOM ${s.roomIndex + 1}/${s.roomCount} — ${s.room.name}`;
+    $('roomname').textContent = `${wing ? wing + ' · ' : ''}ROOM ${s.roomIndex + 1}/${s.roomCount} — ${s.room.name}`;
   } else if (s.phase === 'extraction') {
     $('roomname').textContent = 'EXTRACTION OPEN — RUN';
   } else if (s.phase === 'results') {

@@ -3,7 +3,7 @@
 // machine, consumes chat commands, and emits snapshots + one-shot events.
 
 import { ITEM_BY_ID, rollItem, type ItemDef } from './items.js';
-import { ROOMS, type RoomDef } from './rooms.js';
+import { pickWing, hazardTier, type RoomDef, type WingDef } from './rooms.js';
 import { beaconLuck, infirmaryShieldChance, collect, upgrade, MODULE_INFO } from './hideout.js';
 import type { HideoutModule } from '../types.js';
 import * as store from '../store.js';
@@ -81,6 +81,9 @@ export class Engine {
   raidId = 0;
   endsAt = 0; // current phase deadline (ms epoch)
   nextShiftAt = Date.now() + 20_000; // first shift shortly after boot
+  raidIntervalSec = CONFIG.raidIntervalSec; // adjustable live from the director console
+  wing: WingDef | null = null; // tonight's assignment
+  private lastWingId?: string;
   rooms: RoomDef[] = [];
   roomIndex = -1;
   raiders = new Map<string, Raider>();
@@ -133,7 +136,8 @@ export class Engine {
       case 'results':
         if (now >= this.endsAt) {
           this.phase = 'idle';
-          this.nextShiftAt = now + CONFIG.raidIntervalSec * 1000;
+          // interval 0 = back-to-back shifts: doors reopen moments after results
+          this.nextShiftAt = now + Math.max(3, this.raidIntervalSec) * 1000;
         }
         break;
     }
@@ -151,18 +155,23 @@ export class Engine {
     this.shiftLoot = 1;
     this.roomIndex = -1;
     this.startedAt = Date.now();
-    // Draw the encounter deck: distinct rooms, shuffled.
-    const deck = [...ROOMS].sort(() => this.rng() - 0.5);
+    // Tonight's assignment: one wing of the facility, rooms drawn from its pool.
+    this.wing = pickWing(this.rng, this.lastWingId);
+    this.lastWingId = this.wing.id;
+    const deck = [...this.wing.rooms].sort(() => this.rng() - 0.5);
     this.rooms = deck.slice(0, CONFIG.roomsPerShift);
-    this.say('system', `SHIFT #${this.raidId} — doors open. Type !deploy to clock in for the night.`);
-    this.announce(`SHIFT #${this.raidId}`, 'DOORS OPEN — !deploy TO ENTER', 'spooky');
+    const tier = hazardTier(this.wing.danger);
+    this.say('system', `SHIFT #${this.raidId} — doors open. Tonight: ${this.wing.name} (hazard ${tier}). Type !deploy to clock in.`);
+    this.announce(`SHIFT #${this.raidId}`, `TONIGHT: ${this.wing.name.toUpperCase()} · HAZARD ${tier} — !deploy TO ENTER`, 'spooky');
   }
 
   private beginShift(): void {
     if (this.raiders.size === 0) {
       this.say('system', 'No one clocked in. The facility waits.');
       this.phase = 'idle';
-      this.nextShiftAt = Date.now() + CONFIG.raidIntervalSec * 1000;
+      // Even with interval 0, an empty lobby earns a breather so the doors
+      // don't strobe open/closed to an empty room.
+      this.nextShiftAt = Date.now() + Math.max(60, this.raidIntervalSec) * 1000;
       return;
     }
     this.say('system', `${this.raiders.size} employee(s) descend. The elevator doors close behind them.`);
@@ -253,6 +262,7 @@ export class Engine {
     store.recordRaid({
       id: this.raidId,
       startedAt: this.startedAt,
+      wing: this.wing?.name,
       rooms: this.rooms.map((r) => r.name),
       raiders: [...this.raiders.values()].map((r) => ({ name: r.name, survived: r.alive, haul: r.alive ? r.haul : 0 })),
     });
@@ -266,19 +276,27 @@ export class Engine {
   }
 
   private rollCasualties(danger: number, where: string): void {
+    const wingDanger = this.wing?.danger ?? 1;
     for (const r of this.raiders.values()) {
       if (!r.alive) continue;
-      const hitChance = Math.min(0.6, Math.max(0.02, 0.16 * danger * this.shiftDanger * (1 - r.light)));
+      const hitChance = Math.min(0.6, Math.max(0.02, 0.16 * danger * wingDanger * this.shiftDanger * (1 - r.light)));
       if (this.rng() >= hitChance) continue;
+      // Attribute the hit to one of the wing's residents.
+      const ents = this.wing?.entities ?? [];
+      const ent = ents.length ? ents[Math.floor(this.rng() * ents.length)] : null;
       if (r.shield) {
         r.shield = false;
-        this.say('danger', `${r.display}'s shield shatters in ${where}.`);
+        this.say('danger', `${r.display}'s shield shatters${ent ? ` against ${ent.name}` : ''} in ${where}.`);
       } else if (!r.wounded) {
         r.wounded = true;
-        this.say('danger', `${r.display} is WOUNDED in ${where}. One more hit and it's over.`);
+        this.say('danger', `${r.display} is cornered${ent ? ` by ${ent.name}` : ''} in ${where} — WOUNDED. One more hit and it's over.`);
       } else {
         r.alive = false;
-        r.deathLine = DEATH_LINES[Math.floor(this.rng() * DEATH_LINES.length)];
+        // Entity-specific epitaphs when the wing has residents; house lines otherwise.
+        r.deathLine =
+          ent && this.rng() < 0.65
+            ? ent.lines[Math.floor(this.rng() * ent.lines.length)]
+            : DEATH_LINES[Math.floor(this.rng() * DEATH_LINES.length)];
         const player = store.getPlayer(r.name);
         if (player) {
           player.stats.deaths += 1; // carried light item was removed at deploy — it stays lost
@@ -292,11 +310,12 @@ export class Engine {
   }
 
   private rollLoot(lootFactor: number): void {
+    const wingLoot = this.wing?.loot ?? 1;
     for (const r of this.raiders.values()) {
       if (!r.alive) continue;
-      const chance = Math.min(0.95, Math.max(0.1, 0.5 * lootFactor * this.shiftLoot * (r.wounded ? 0.5 : 1)));
+      const chance = Math.min(0.95, Math.max(0.1, 0.5 * lootFactor * wingLoot * this.shiftLoot * (r.wounded ? 0.5 : 1)));
       if (this.rng() >= chance) continue;
-      const item = rollItem(this.rng, lootFactor * this.shiftLoot * r.luck);
+      const item = rollItem(this.rng, lootFactor * wingLoot * this.shiftLoot * r.luck);
       r.loot.push(item);
       r.haul += item.value;
       this.say('loot', `${r.display} finds ${item.name} (${item.value}cr)`);
@@ -463,12 +482,21 @@ export class Engine {
   }
 
   // ---------------------------------------------------------------- director
-  director(action: string): boolean {
+  director(action: string, arg?: number): boolean {
     switch (action) {
       case 'start':
         if (this.phase !== 'idle') return false;
         this.openLobby();
         return true;
+      case 'interval': {
+        // Time between shifts, in seconds. 0 = back-to-back (doors reopen
+        // right after results; an empty lobby still gets a 60s breather).
+        if (arg === undefined || !Number.isFinite(arg)) return false;
+        this.raidIntervalSec = Math.max(0, Math.min(3600, Math.round(arg)));
+        if (this.phase === 'idle') this.nextShiftAt = Date.now() + Math.max(3, this.raidIntervalSec) * 1000;
+        this.say('system', `The Director adjusts the shift schedule: ${this.raidIntervalSec === 0 ? 'back-to-back' : `${this.raidIntervalSec}s between shifts`}.`);
+        return true;
+      }
       case 'bless':
         if (this.phase !== 'room' && this.phase !== 'extraction') return false;
         this.shiftDanger *= 0.6;
@@ -502,6 +530,8 @@ export class Engine {
       now,
       phase: this.phase,
       raidId: this.raidId,
+      intervalSec: this.raidIntervalSec,
+      wing: this.phase !== 'idle' && this.wing ? { id: this.wing.id, name: this.wing.name, tier: hazardTier(this.wing.danger) } : null,
       secondsLeft: this.phase === 'idle' ? Math.max(0, Math.ceil((this.nextShiftAt - now) / 1000)) : Math.max(0, Math.ceil((this.endsAt - now) / 1000)),
       roomIndex: this.roomIndex,
       roomCount: this.rooms.length,
