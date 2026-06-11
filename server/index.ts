@@ -10,6 +10,7 @@ import { Engine, CONFIG } from './game/engine.js';
 import { connectTwitch, startMockChat } from './twitch.js';
 import * as store from './store.js';
 import { ITEM_BY_ID, RARITY_COLOR } from './game/items.js';
+import { publicHideout } from './game/hideout.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const WEB = join(ROOT, 'web');
@@ -17,7 +18,7 @@ const PORT = Number(process.env.PORT) || 3000;
 const CHANNEL = process.env.TWITCH_CHANNEL || '';
 const DIRECTOR_KEY = process.env.DIRECTOR_KEY || '';
 
-store.load();
+await store.init();
 const engine = new Engine();
 engine.start();
 
@@ -83,7 +84,16 @@ function publicPlayer(p: store.PlayerRecord) {
     return { id, qty, name: def?.name ?? id, value: def?.value ?? 0, rarity: def?.rarity ?? 'scrap', light: def?.light ?? 0, flavor: def?.flavor ?? '' };
   });
   const stashValue = stash.reduce((a, s) => a + s.value * s.qty, 0);
-  return { name: p.name, display: p.display, credits: p.credits, stats: p.stats, stash, stashValue, netWorth: p.credits + stashValue };
+  return {
+    name: p.name,
+    display: p.display,
+    credits: p.credits,
+    stats: p.stats,
+    stash,
+    stashValue,
+    netWorth: p.credits + stashValue,
+    hideout: publicHideout(p),
+  };
 }
 
 // ---------------------------------------------------------------- server

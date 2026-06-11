@@ -68,6 +68,15 @@ async function refreshBoards() {
     )
     .join('');
 
+  // Keep an open employee file fresh as chat changes it.
+  if (currentPlayer) {
+    const res = await fetch(`/api/player/${encodeURIComponent(currentPlayer.name)}`);
+    if (res.ok) {
+      currentPlayer = await res.json();
+      renderPlayer();
+    }
+  }
+
   $('raids').querySelector('tbody').innerHTML = raids
     .map((r) => {
       const survived = r.raiders.filter((x) => x.survived).length;
@@ -95,7 +104,17 @@ async function lookupPlayer() {
     box.innerHTML = `<p class="muted">No employee file. Type <b style="color:var(--amber)">!clockin</b> in chat to enroll.</p>`;
     return;
   }
-  const p = await res.json();
+  currentPlayer = await res.json();
+  renderPlayer();
+}
+
+let currentPlayer = null;
+
+function renderPlayer() {
+  const p = currentPlayer;
+  if (!p) return;
+  const box = $('playerbox');
+  const h = p.hideout;
   box.innerHTML = `
     <div class="stats">
       ${stat(p.credits + 'cr', 'credits')}
@@ -103,7 +122,28 @@ async function lookupPlayer() {
       ${stat(p.stats.extractions + '/' + p.stats.shifts, 'extract rate')}
       ${stat(p.stats.bestHaul + 'cr', 'best haul')}
     </div>
-    <table><thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Value</th></tr></thead><tbody>
+
+    <div class="hideout">
+      <div class="hideout-head">
+        <div><b>The Hideout</b> <span class="muted">${h.ratePerHour}cr/hr · banks up to ${h.cap}cr</span></div>
+        <div class="pending" id="pending">+${h.pending}cr</div>
+      </div>
+      <div class="pbar"><i style="width:${Math.min(100, (h.pending / h.cap) * 100)}%"></i></div>
+      <div class="muted" style="margin:6px 0 12px">Type <b style="color:var(--amber)">!collect</b> in chat to bank it. ${h.pending >= h.cap ? '<b style="color:var(--red)">VAULT FULL — overflow is wasted.</b>' : ''}</div>
+      <div class="modgrid">
+        ${h.modules
+          .map(
+            (m) => `<div class="mod">
+              <div class="modname">${esc(m.name)} <span class="lvl">L${m.level}${m.level >= m.max ? ' MAX' : ''}</span></div>
+              <div class="flavor">${esc(m.blurb)}</div>
+              <div class="modcost">${m.nextCost === null ? 'maxed' : `!upgrade ${m.id} <span class="muted">(${m.nextCost}cr)</span>`}</div>
+            </div>`,
+          )
+          .join('')}
+      </div>
+    </div>
+
+    <table style="margin-top:18px"><thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Value</th></tr></thead><tbody>
       ${p.stash
         .map(
           (s) => `<tr>
@@ -114,6 +154,19 @@ async function lookupPlayer() {
         .join('') || '<tr><td colspan="3" class="muted">Stash is empty. Deploy and extract.</td></tr>'}
     </tbody></table>`;
 }
+
+// Tick the pending-income number upward live, so the hideout feels alive even
+// though the value is really computed server-side.
+setInterval(() => {
+  const p = currentPlayer;
+  const el = $('pending');
+  if (!p || !el) return;
+  const h = p.hideout;
+  const elapsedHr = (Date.now() - h.collectedAt) / 3_600_000;
+  const live = Math.min(h.cap, Math.floor(h.ratePerHour * elapsedHr));
+  el.textContent = `+${live}cr`;
+  el.classList.toggle('full', live >= h.cap);
+}, 1000);
 
 // ---------------------------------------------------------------- the haunt
 // Real chat messages bleed through the page as they happen. Sometimes a word

@@ -1,70 +1,78 @@
-// Flat-file persistence for the prototype. Swap this module for Supabase
-// (or any DB) later — the engine only talks to the exported functions.
+// In-memory authoritative store with a pluggable write-through backend.
+//
+// The engine reads and mutates records synchronously; the store flushes
+// whatever changed to the backend (flat file or Supabase) every few seconds
+// and on exit. Picking a backend is a single env-var decision — no code in
+// the engine ever knows which one is live.
 
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import type { Backend } from './persistence/types.js';
+import { FileBackend } from './persistence/file.js';
+import { SupabaseBackend } from './persistence/supabase.js';
+import {
+  defaultHideout,
+  normalizePlayer,
+  type DataShape,
+  type PlayerRecord,
+  type RaidRecord,
+} from './types.js';
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const DATA_DIR = join(ROOT, 'data');
-
-export interface PlayerRecord {
-  name: string; // lowercase twitch login
-  display: string;
-  credits: number;
-  stash: Record<string, number>; // itemId -> qty
-  stats: {
-    shifts: number;
-    extractions: number;
-    deaths: number;
-    lootValue: number; // lifetime extracted value
-    bestHaul: number;
-  };
-  clockedInAt: number;
-  lastSeen: number;
-}
-
-export interface RaidRecord {
-  id: number;
-  startedAt: number;
-  rooms: string[];
-  raiders: { name: string; survived: boolean; haul: number }[];
-}
-
-interface DataShape {
-  players: Record<string, PlayerRecord>;
-  raids: RaidRecord[];
-  raidCounter: number;
-}
+export type { PlayerRecord, RaidRecord } from './types.js';
 
 let data: DataShape = { players: {}, raids: [], raidCounter: 0 };
-let dirty = false;
+let backend: Backend;
 
-const FILE = join(DATA_DIR, 'nightshift.json');
+// Change tracking, so a flush only ships what actually moved.
+const dirtyPlayers = new Set<string>();
+const pendingRaids: RaidRecord[] = [];
+let flushing = false;
 
-export function load(): void {
-  if (existsSync(FILE)) {
-    try {
-      data = JSON.parse(readFileSync(FILE, 'utf8'));
-    } catch {
-      console.error('[store] corrupt data file, starting fresh');
-    }
+function chooseBackend(): Backend {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_KEY;
+  if (url && key) return new SupabaseBackend(url, key);
+  return new FileBackend();
+}
+
+export async function init(): Promise<void> {
+  backend = chooseBackend();
+  await backend.init();
+  data = await backend.loadAll();
+  for (const p of Object.values(data.players)) normalizePlayer(p);
+  console.log(`[store] backend: ${backend.label} — ${Object.keys(data.players).length} player(s) loaded`);
+
+  setInterval(() => void flush(), 8000).unref();
+  process.on('SIGINT', () => void shutdown());
+  process.on('SIGTERM', () => void shutdown());
+}
+
+async function flush(): Promise<void> {
+  if (flushing) return;
+  if (dirtyPlayers.size === 0 && pendingRaids.length === 0) return;
+  flushing = true;
+
+  const players = [...dirtyPlayers].map((n) => data.players[n]).filter(Boolean);
+  const raids = pendingRaids.splice(0);
+  dirtyPlayers.clear();
+
+  try {
+    await backend.flush(players, raids, data.raidCounter);
+  } catch (err) {
+    // Re-queue so nothing is lost; try again next tick.
+    for (const p of players) dirtyPlayers.add(p.name);
+    pendingRaids.unshift(...raids);
+    console.error('[store] flush failed, will retry:', (err as Error).message);
+  } finally {
+    flushing = false;
   }
 }
 
-export function save(): void {
-  if (!dirty) return;
-  mkdirSync(DATA_DIR, { recursive: true });
-  writeFileSync(FILE, JSON.stringify(data));
-  dirty = false;
+async function shutdown(): Promise<void> {
+  await flush();
+  process.exit(0);
 }
 
-// Autosave every 10s, plus on exit.
-setInterval(save, 10_000).unref();
-process.on('exit', save);
-
-export function markDirty(): void {
-  dirty = true;
+export function markDirty(login: string): void {
+  dirtyPlayers.add(login.toLowerCase());
 }
 
 export function getPlayer(name: string): PlayerRecord | undefined {
@@ -73,17 +81,20 @@ export function getPlayer(name: string): PlayerRecord | undefined {
 
 export function createPlayer(name: string, display: string): PlayerRecord {
   const key = name.toLowerCase();
+  const now = Date.now();
   const p: PlayerRecord = {
     name: key,
     display,
     credits: 100,
     stash: { penlight: 1 },
     stats: { shifts: 0, extractions: 0, deaths: 0, lootValue: 0, bestHaul: 0 },
-    clockedInAt: Date.now(),
-    lastSeen: Date.now(),
+    hideout: defaultHideout(),
+    incomeCollectedAt: now,
+    clockedInAt: now,
+    lastSeen: now,
   };
   data.players[key] = p;
-  dirty = true;
+  markDirty(key);
   return p;
 }
 
@@ -93,14 +104,13 @@ export function allPlayers(): PlayerRecord[] {
 
 export function nextRaidId(): number {
   data.raidCounter += 1;
-  dirty = true;
   return data.raidCounter;
 }
 
 export function recordRaid(r: RaidRecord): void {
   data.raids.push(r);
   if (data.raids.length > 100) data.raids = data.raids.slice(-100);
-  dirty = true;
+  pendingRaids.push(r);
 }
 
 export function recentRaids(n = 20): RaidRecord[] {

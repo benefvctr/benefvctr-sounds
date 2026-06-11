@@ -4,6 +4,8 @@
 
 import { ITEM_BY_ID, rollItem, type ItemDef } from './items.js';
 import { ROOMS, type RoomDef } from './rooms.js';
+import { beaconLuck, infirmaryShieldChance, collect, upgrade, MODULE_INFO } from './hideout.js';
+import type { HideoutModule } from '../types.js';
 import * as store from '../store.js';
 
 export type Phase = 'idle' | 'lobby' | 'room' | 'extraction' | 'results';
@@ -15,6 +17,7 @@ export interface Raider {
   wounded: boolean;
   shield: boolean;
   light: number;
+  luck: number; // beacon-boosted loot luck for this shift
   lightItemId?: string; // carried from stash; lost on death, returned on extract
   loot: ItemDef[];
   haul: number;
@@ -216,7 +219,7 @@ export class Engine {
       player.stats.extractions += 1;
       player.stats.lootValue += r.haul;
       player.stats.bestHaul = Math.max(player.stats.bestHaul, r.haul);
-      store.markDirty();
+      store.markDirty(player.name);
       this.say('extract', `${r.display} EXTRACTED — haul ${r.haul}cr (+${CONFIG.extractBonus}cr bonus)`);
     }
     this.onEvent({ type: 'pulse', pulse: 'extract' });
@@ -258,7 +261,7 @@ export class Engine {
         const player = store.getPlayer(r.name);
         if (player) {
           player.stats.deaths += 1; // carried light item was removed at deploy — it stays lost
-          store.markDirty();
+          store.markDirty(player.name);
         }
         this.say('death', `✖ ${r.display} ${r.deathLine}. Gear and ${r.haul}cr of loot — gone.`);
         this.onEvent({ type: 'pulse', pulse: 'death' });
@@ -271,7 +274,7 @@ export class Engine {
       if (!r.alive) continue;
       const chance = Math.min(0.95, Math.max(0.1, 0.5 * lootFactor * this.shiftLoot * (r.wounded ? 0.5 : 1)));
       if (this.rng() >= chance) continue;
-      const item = rollItem(this.rng, lootFactor * this.shiftLoot);
+      const item = rollItem(this.rng, lootFactor * this.shiftLoot * r.luck);
       r.loot.push(item);
       r.haul += item.value;
       this.say('loot', `${r.display} finds ${item.name} (${item.value}cr)`);
@@ -328,19 +331,57 @@ export class Engine {
           if (p.stash[best.id] <= 0) delete p.stash[best.id];
         }
         p.stats.shifts += 1;
-        store.markDirty();
+        store.markDirty(login);
+        // Hideout payoffs: beacon improves loot luck, infirmary may grant a shield.
+        const startShield = this.rng() < infirmaryShieldChance(p.hideout);
         this.raiders.set(login, {
           name: login,
           display,
           alive: true,
           wounded: false,
-          shield: false,
+          shield: startShield,
           light: best?.light ?? 0,
+          luck: beaconLuck(p.hideout),
           lightItemId: best?.id,
           loot: [],
           haul: 0,
         });
-        this.say('info', `${display} deploys${best ? ` carrying ${best.name}` : ' with no light. Bold.'}`);
+        const extras = [best ? `carrying ${best.name}` : 'with no light. Bold.', startShield ? 'Infirmary shield online.' : '']
+          .filter(Boolean)
+          .join(' ');
+        this.say('info', `${display} deploys ${extras}`);
+        break;
+      }
+      case 'hideout':
+      case 'base': {
+        if (!player) return;
+        const pend = collect(player, Date.now());
+        if (pend > 0) store.markDirty(login);
+        this.say(
+          'system',
+          `${display}'s hideout: gen ${player.hideout.generator} · vault ${player.hideout.vault} · beacon ${player.hideout.beacon} · infirmary ${player.hideout.infirmary}. ${pend > 0 ? `Collected ${pend}cr.` : 'Manage it on the companion site.'}`,
+        );
+        break;
+      }
+      case 'collect': {
+        if (!player) return;
+        const amount = collect(player, Date.now());
+        store.markDirty(login);
+        this.say('system', amount > 0 ? `${display} collects ${amount}cr from the hideout.` : `${display}'s hideout has nothing banked yet.`);
+        break;
+      }
+      case 'upgrade': {
+        if (!player) return;
+        const module = args[0] as HideoutModule;
+        if (!MODULE_INFO[module]) {
+          this.say('system', `${display}: upgrade what? generator · vault · beacon · infirmary`);
+          return;
+        }
+        const res = upgrade(player, module, Date.now());
+        store.markDirty(login);
+        if (res.ok) this.say('system', `${display} upgrades ${MODULE_INFO[module].name} to L${res.level} (−${res.cost}cr).`);
+        else if (res.reason === 'broke') this.say('system', `${display} needs ${res.cost}cr to upgrade ${MODULE_INFO[module].name}.`);
+        else if (res.reason === 'maxed') this.say('system', `${display}'s ${MODULE_INFO[module].name} is already maxed.`);
         break;
       }
       case 'heal': {
@@ -387,7 +428,7 @@ export class Engine {
     if (this.phase !== 'room' && this.phase !== 'extraction') return;
     if (effect()) {
       player.credits -= cost;
-      store.markDirty();
+      store.markDirty(player.name);
     }
   }
 

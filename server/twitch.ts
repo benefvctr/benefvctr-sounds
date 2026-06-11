@@ -94,6 +94,12 @@ export function startMockChat(onChat: ChatHandler, getPhase: () => string, getVo
       onChat(user, user, '!clockin');
       return;
     }
+    // Idle viewers tend their hideout between shifts.
+    if ((phase === 'idle' || phase === 'results') && Math.random() < 0.25) {
+      const modules = ['generator', 'vault', 'beacon', 'infirmary'];
+      onChat(user, user, Math.random() < 0.5 ? '!collect' : `!upgrade ${modules[Math.floor(Math.random() * modules.length)]}`);
+      return;
+    }
     if (phase === 'lobby' && Math.random() < 0.75) {
       onChat(user, user, '!deploy');
       return;

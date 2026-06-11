@@ -52,6 +52,26 @@ TWITCH_CHANNEL=yourchannel npm run dev
 | `!heal [name]` | 30cr — cure a wounded raider |
 | `!shield [name]` | 40cr — block the next hit on a raider |
 | `!bomb` | 60cr — sabotage the shift: danger ×1.4, loot ×1.5 |
+| `!collect` | Bank your hideout's passive income |
+| `!upgrade <module>` | Upgrade a hideout module (`generator`/`vault`/`beacon`/`infirmary`) |
+| `!hideout` | Collect and show your hideout summary |
+
+## The Hideout (passive income)
+
+Every employee has a persistent base that earns credits **between shifts and
+between streams** — so even lurkers build a stake and have a reason to come
+back. Income accrues lazily (no background job) and is correct after restarts
+or days away. Manage it on the companion site or via chat.
+
+| Module | Effect |
+|---|---|
+| **Generator** | Passive credits/hour (15 × level) |
+| **Vault** | Caps unclaimed income (200 × level) — overflow is wasted, so upgrade before you go offline |
+| **Beacon** | Loot luck on deploy — pulls more rares/anomalies |
+| **Infirmary** | Chance to deploy already shielded |
+
+The vault cap is the hook: a daily viewer who never upgrades the vault leaves
+credits on the table, which nudges them to invest and check back.
 
 `!heal` / `!shield` / `!bomb` trigger the channel's alert sounds
 (`Health.wav`, `Shield_Charge.wav`, `bomb_dropped.wav`) through the overlay.
@@ -67,6 +87,40 @@ TWITCH_CHANNEL=yourchannel npm run dev
 | `ROOM_SEC` | `24` | Seconds per room |
 | `ROOMS_PER_SHIFT` | `4` | Rooms per shift |
 | `DIRECTOR_KEY` | *(unset = open)* | If set, `/director` actions require this key |
+| `SUPABASE_URL` | *(unset → file store)* | Your project URL |
+| `SUPABASE_SERVICE_KEY` | *(unset → file store)* | **Service role** key (server-side only) |
+
+## Persistence
+
+The store keeps the authoritative state in memory and flushes changes to a
+backend every few seconds. Two backends, chosen automatically:
+
+- **File** (default) — `data/nightshift.json`. Zero setup, perfect for local dev.
+- **Supabase** — activates when `SUPABASE_URL` + `SUPABASE_SERVICE_KEY` are set.
+
+### Connecting Supabase
+
+1. Create a project (free tier is plenty — a few KB per player). It won't pause
+   while your live server is hitting it.
+2. Run `supabase/migrations/0001_init.sql` in the SQL Editor (or via the CLI).
+3. Set `SUPABASE_URL` and the **service role** key in your server env.
+
+The service role key bypasses RLS and must stay server-side — the companion
+site reads through this game's own API, never the database directly. The
+migration enables RLS with no public policies, so the tables stay sealed even
+if the anon key leaks.
+
+## Deploying
+
+This is a stateful WebSocket server, so it wants a long-running host, not a
+static/serverless one:
+
+- **Render** — Web Service, build `npm install`, start `npm start`. Set the env
+  vars above. The overlay, companion, and director pages are all served by this
+  one service, so a single Render service is the whole deployment.
+- **Netlify** — best as a CDN in front (custom domain, the companion site), but
+  the realtime server itself should run on Render. Don't try to host the WS
+  server on Netlify Functions.
 
 ## Architecture
 
@@ -75,11 +129,18 @@ server/
   index.ts        HTTP + WebSocket server, JSON API, static hosting
   twitch.ts       anonymous Twitch IRC reader + mock chat simulator
   store.ts        flat-file persistence (data/) — swap for Supabase later
+  types.ts        shared persistent record shapes
+  store.ts        in-memory cache + write-through to a pluggable backend
+  persistence/
+    file.ts       flat-file backend (default)
+    supabase.ts   Supabase backend (set SUPABASE_URL + SERVICE_KEY)
   game/
     engine.ts     authoritative 1Hz simulation: shift state machine, votes,
                   casualties, loot, economy, director powers
+    hideout.ts    passive-income economy + module upgrades
     items.ts      item catalogue (rarity, value, light sources)
     rooms.ts      encounter deck + chat-vote definitions
+supabase/migrations/  SQL schema for the Supabase backend
 web/
   overlay.html/.js     OBS overlay HUD
   companion.html/.js   viewer-facing site
