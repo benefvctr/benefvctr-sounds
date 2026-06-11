@@ -1,0 +1,18 @@
+{
+  "name": "night-shift",
+  "version": "0.1.0",
+  "description": "NIGHT SHIFT — a persistent extraction game your Twitch chat lives inside. OBS overlay + companion site.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch server/index.ts",
+    "start": "tsx server/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@types/node": "^25.9.3",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
+    "ws": "^8.21.0"
+  }
+}

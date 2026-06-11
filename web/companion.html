@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>NIGHT SHIFT — Benefactor Industries</title>
+<style>
+  :root {
+    --amber: #ffb454; --red: #ff4f4f; --green: #6dffa6; --blue: #5fb7ff;
+    --bg: #0a0b0e; --panel: #101218; --line: rgba(255,180,84,0.25);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg); color: #d8d3c8;
+    font-family: 'Courier New', ui-monospace, monospace;
+    min-height: 100vh;
+    background-image: repeating-linear-gradient(0deg, rgba(255,255,255,0.015) 0 1px, transparent 1px 3px);
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px 80px; }
+  header { border-bottom: 1px solid var(--line); padding-bottom: 18px; margin-bottom: 24px; }
+  header h1 { color: var(--amber); letter-spacing: 6px; font-size: 28px; text-transform: uppercase; }
+  header .sub { font-size: 12px; letter-spacing: 3px; opacity: 0.6; margin-top: 6px; text-transform: uppercase; }
+  #live { float: right; font-size: 13px; letter-spacing: 2px; padding: 6px 12px; border: 1px solid var(--line); text-transform: uppercase; }
+  #live .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #555; margin-right: 7px; }
+  #live.on .dot { background: var(--red); animation: blink 1.4s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0.3; } }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+  section {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
+    padding: 18px; margin-bottom: 18px;
+  }
+  section h2 { color: var(--amber); font-size: 14px; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 14px; }
+  .full { grid-column: 1 / -1; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; opacity: 0.55; padding: 4px 8px; }
+  td { padding: 6px 8px; border-top: 1px solid rgba(255,255,255,0.05); }
+  td.num, th.num { text-align: right; }
+  .cr { color: var(--green); }
+  .dead { color: var(--red); }
+  .rank { opacity: 0.5; }
+
+  input[type=text] {
+    background: #06070a; border: 1px solid var(--line); color: #fff; padding: 10px 12px;
+    font-family: inherit; font-size: 15px; width: 100%; border-radius: 3px;
+  }
+  input:focus { outline: 1px solid var(--amber); }
+  .stats { display: flex; gap: 10px; flex-wrap: wrap; margin: 14px 0; }
+  .stat { border: 1px solid var(--line); padding: 10px 14px; border-radius: 3px; min-width: 110px; }
+  .stat b { display: block; font-size: 22px; color: #fff; }
+  .stat span { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; opacity: 0.55; }
+
+  #feedbox { font-size: 13px; max-height: 260px; overflow-y: auto; }
+  #feedbox div { padding: 3px 0; opacity: 0.8; }
+  #feedbox .death { color: var(--red); } #feedbox .loot { color: var(--green); }
+  #feedbox .vote { color: var(--blue); } #feedbox .extract { color: var(--green); }
+  #feedbox .danger { color: var(--red); }
+
+  .cmds td:first-child { color: var(--amber); white-space: nowrap; }
+  .muted { opacity: 0.55; font-size: 12px; }
+  .flavor { opacity: 0.5; font-style: italic; font-size: 12px; }
+
+  /* ---------- the haunt layer: live chat bleeding through the page ---------- */
+  #ghosts { position: fixed; inset: 0; pointer-events: none; z-index: 50; overflow: hidden; }
+  .wrap { position: relative; z-index: 1; }
+  .ghost {
+    position: absolute; max-width: 420px; font-size: 14px; letter-spacing: 1px;
+    color: rgba(216, 211, 200, 0.5); text-shadow: 0 0 8px rgba(255, 180, 84, 0.25);
+    filter: blur(0.4px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    animation: haunt 9s ease-out forwards;
+  }
+  .ghost .who { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; opacity: 0.5; margin-right: 8px; }
+  .ghost.reply { color: rgba(255, 79, 79, 0.6); text-shadow: 0 0 10px rgba(255, 79, 79, 0.35); font-size: 15px; letter-spacing: 3px; animation: hauntreply 7s ease-out forwards; }
+  @keyframes haunt {
+    0% { opacity: 0; transform: translateY(14px); }
+    12% { opacity: 1; }
+    70% { opacity: 0.55; }
+    100% { opacity: 0; transform: translateY(-50px); }
+  }
+  @keyframes hauntreply {
+    0% { opacity: 0; }
+    8% { opacity: 1; } 12% { opacity: 0.1; } 16% { opacity: 0.9; } /* flicker in */
+    75% { opacity: 0.6; }
+    100% { opacity: 0; }
+  }
+  footer { text-align: center; font-size: 11px; letter-spacing: 3px; opacity: 0.3; padding: 30px 0 10px; text-transform: uppercase; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div id="live"><span class="dot"></span><span id="livetext">OFFLINE</span></div>
+      <h1>Night Shift</h1>
+      <div class="sub">Benefactor Industries · After-Hours Operations Division · Est. ████</div>
+    </header>
+
+    <section class="full">
+      <h2>// Live Shift</h2>
+      <div class="stats" id="shiftstats"></div>
+      <div id="feedbox"></div>
+    </section>
+
+    <div class="grid">
+      <section>
+        <h2>// Your Employee File</h2>
+        <input type="text" id="lookup" placeholder="your twitch name…" autocomplete="off" />
+        <div id="playerbox" style="margin-top:14px"></div>
+      </section>
+
+      <section>
+        <h2>// Field Manual</h2>
+        <table class="cmds">
+          <tr><td>!clockin</td><td>Enroll. 100cr signing bonus + a penlight.</td></tr>
+          <tr><td>!deploy</td><td>Join the next shift while doors are open. Your best light source is auto-carried — and lost if you die.</td></tr>
+          <tr><td>VOTE WORDS</td><td>During events, type the shown word in chat. Everyone votes, raider or not.</td></tr>
+          <tr><td>!heal [name]</td><td id="costheal">Patch up a wounded raider.</td></tr>
+          <tr><td>!shield [name]</td><td id="costshield">Block the next hit on a raider.</td></tr>
+          <tr><td>!bomb</td><td id="costbomb">Sabotage the shift: more danger, more loot. Chaos.</td></tr>
+        </table>
+        <p class="muted" style="margin-top:12px">Extract to keep loot + bonus. Die and you lose everything you carried. The Benefactor thanks you for your flexibility.</p>
+      </section>
+    </div>
+
+    <section class="full">
+      <h2>// Asset Leaderboard <span class="muted">(net worth: credits + stash)</span></h2>
+      <table id="board"><thead><tr>
+        <th>#</th><th>Employee</th><th class="num">Credits</th><th class="num">Stash</th><th class="num">Net Worth</th>
+        <th class="num">Shifts</th><th class="num">Extracts</th><th class="num">Deaths</th><th class="num">Best Haul</th>
+      </tr></thead><tbody></tbody></table>
+    </section>
+
+    <section class="full">
+      <h2>// Shift Archive</h2>
+      <table id="raids"><thead><tr><th>Shift</th><th>Route</th><th>Crew</th><th class="num">Survived</th></tr></thead><tbody></tbody></table>
+    </section>
+    <footer>this page is monitored for quality assurance</footer>
+  </div>
+  <div id="ghosts"></div>
+  <script src="/companion.js"></script>
+</body>
+</html>

@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>NIGHT SHIFT — overlay</title>
+<style>
+  /* Designed as a 1920x1080 OBS browser source. Background is transparent;
+     only the HUD elements render. */
+  :root {
+    --amber: #ffb454;
+    --red: #ff4f4f;
+    --green: #6dffa6;
+    --blue: #5fb7ff;
+    --ink: rgba(8, 9, 12, 0.88);
+    --line: rgba(255, 180, 84, 0.35);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: transparent; }
+  body {
+    font-family: 'Courier New', ui-monospace, monospace;
+    color: var(--amber);
+    text-transform: uppercase;
+    position: relative;
+  }
+
+  /* full-screen pulse vignette */
+  #pulse {
+    position: absolute; inset: 0; pointer-events: none; opacity: 0;
+    transition: opacity 1.2s ease-out;
+  }
+  #pulse.death   { box-shadow: inset 0 0 240px 80px rgba(255, 40, 40, 0.55); }
+  #pulse.extract { box-shadow: inset 0 0 240px 80px rgba(80, 255, 150, 0.45); }
+  #pulse.curse   { box-shadow: inset 0 0 280px 120px rgba(60, 0, 80, 0.6); }
+  #pulse.bless   { box-shadow: inset 0 0 240px 80px rgba(255, 220, 120, 0.45); }
+  #pulse.on { opacity: 1; transition: opacity 0.05s; }
+
+  .panel {
+    background: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+  }
+  .panel::after { /* scanlines */
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(255,255,255,0.03) 0 1px, transparent 1px 3px);
+  }
+
+  /* ---------- idle badge ---------- */
+  #idle {
+    position: absolute; left: 36px; bottom: 36px;
+    padding: 14px 22px; font-size: 20px; letter-spacing: 2px;
+    display: none;
+  }
+  #idle b { color: #fff; }
+  #idle .blink { animation: blink 1.6s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0.25; } }
+
+  /* ---------- lower third (active shift) ---------- */
+  #hud {
+    position: absolute; left: 36px; right: 36px; bottom: 36px;
+    display: none; gap: 16px;
+  }
+  #hud.show, #idle.show { display: flex; }
+
+  #status { width: 320px; padding: 18px 20px; flex-shrink: 0; }
+  #status .shift { font-size: 26px; letter-spacing: 3px; color: #fff; }
+  #status .room { font-size: 15px; margin-top: 8px; letter-spacing: 1px; min-height: 38px; }
+  #status .timer { font-size: 44px; margin-top: 6px; font-weight: bold; }
+  #status .timer.low { color: var(--red); animation: blink 0.8s steps(2) infinite; }
+  #status .bar { height: 4px; background: rgba(255,180,84,0.15); margin-top: 10px; }
+  #status .bar i { display: block; height: 100%; background: var(--amber); transition: width 1s linear; }
+
+  #feed { flex: 1; padding: 14px 20px; font-size: 17px; letter-spacing: 0.5px; display: flex; flex-direction: column; justify-content: flex-end; }
+  #feed .line { padding: 3px 0; opacity: 0.55; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #feed .line:last-child { opacity: 1; color: #fff; }
+  #feed .line.death { color: var(--red); opacity: 1; }
+  #feed .line.loot { color: var(--green); }
+  #feed .line.extract { color: var(--green); opacity: 1; }
+  #feed .line.vote { color: var(--blue); }
+  #feed .line.danger { color: var(--red); }
+
+  #squad { width: 360px; padding: 14px 18px; flex-shrink: 0; }
+  #squad h3 { font-size: 13px; letter-spacing: 2px; opacity: 0.7; margin-bottom: 8px; }
+  #squad .chips { display: flex; flex-wrap: wrap; gap: 6px; max-height: 130px; overflow: hidden; }
+  .chip {
+    font-size: 13px; padding: 4px 9px; border: 1px solid var(--line); border-radius: 3px;
+    color: #fff; background: rgba(255,180,84,0.08); letter-spacing: 1px;
+  }
+  .chip.dead { color: rgba(255,79,79,0.8); border-color: rgba(255,79,79,0.4); text-decoration: line-through; background: transparent; }
+  .chip.wounded { color: var(--red); border-color: var(--red); }
+  .chip.shield { box-shadow: 0 0 8px rgba(95,183,255,0.8); border-color: var(--blue); }
+  .chip .haul { color: var(--green); margin-left: 6px; }
+
+  /* ---------- vote panel ---------- */
+  #vote {
+    position: absolute; left: 50%; transform: translateX(-50%); bottom: 240px;
+    width: 760px; padding: 22px 26px; display: none; text-align: center;
+  }
+  #vote.show { display: block; }
+  #vote .prompt { font-size: 21px; color: #fff; letter-spacing: 1px; margin-bottom: 16px; }
+  #vote .opts { display: flex; gap: 18px; }
+  .opt { flex: 1; }
+  .opt .word { font-size: 30px; font-weight: bold; letter-spacing: 4px; }
+  .opt.a .word { color: var(--amber); } .opt.b .word { color: var(--blue); }
+  .opt .label { font-size: 13px; opacity: 0.75; margin: 4px 0 8px; }
+  .opt .bar { height: 14px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; }
+  .opt.a .bar i { background: var(--amber); } .opt.b .bar i { background: var(--blue); }
+  .opt .bar i { display: block; height: 100%; width: 0%; transition: width 0.6s ease; }
+  .opt .count { font-size: 17px; margin-top: 5px; color: #fff; }
+  #vote .vtimer { margin-top: 12px; font-size: 15px; letter-spacing: 3px; }
+  #vote .hint { font-size: 12px; opacity: 0.6; margin-top: 6px; letter-spacing: 2px; }
+</style>
+</head>
+<body>
+  <div id="pulse"></div>
+
+  <div id="idle" class="panel">
+    NIGHT SHIFT // NEXT SHIFT <b id="countdown">--:--</b>
+    &nbsp;·&nbsp; <span class="blink">!clockin</span> to enroll · !deploy when doors open
+  </div>
+
+  <div id="vote" class="panel">
+    <div class="prompt" id="vprompt"></div>
+    <div class="opts">
+      <div class="opt a"><div class="word" id="vaword"></div><div class="label" id="valabel"></div><div class="bar"><i id="vabar"></i></div><div class="count" id="vacount">0</div></div>
+      <div class="opt b"><div class="word" id="vbword"></div><div class="label" id="vblabel"></div><div class="bar"><i id="vbbar"></i></div><div class="count" id="vbcount">0</div></div>
+    </div>
+    <div class="vtimer" id="vtimer"></div>
+    <div class="hint">TYPE THE WORD IN CHAT — EVERYONE VOTES, NOT JUST RAIDERS</div>
+  </div>
+
+  <div id="hud">
+    <div id="status" class="panel">
+      <div class="shift" id="shiftno">SHIFT #—</div>
+      <div class="room" id="roomname"></div>
+      <div class="timer" id="timer">--</div>
+      <div class="bar"><i id="roombar"></i></div>
+    </div>
+    <div id="feed" class="panel"></div>
+    <div id="squad" class="panel">
+      <h3 id="squadhead">ON SHIFT</h3>
+      <div class="chips" id="chips"></div>
+    </div>
+  </div>
+
+  <script src="/overlay.js"></script>
+</body>
+</html>

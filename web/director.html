@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>NIGHT SHIFT — Director</title>
+<style>
+  body { background: #0a0b0e; color: #d8d3c8; font-family: 'Courier New', ui-monospace, monospace; padding: 40px 16px; }
+  .wrap { max-width: 560px; margin: 0 auto; }
+  h1 { color: #ffb454; letter-spacing: 5px; text-transform: uppercase; font-size: 22px; margin-bottom: 6px; }
+  p { opacity: 0.6; font-size: 13px; margin-bottom: 24px; }
+  button {
+    display: block; width: 100%; margin-bottom: 14px; padding: 18px;
+    background: #101218; color: #fff; border: 1px solid rgba(255,180,84,0.35); border-radius: 4px;
+    font-family: inherit; font-size: 17px; letter-spacing: 3px; text-transform: uppercase; cursor: pointer;
+  }
+  button:hover { background: #1a1d26; border-color: #ffb454; }
+  button small { display: block; font-size: 11px; opacity: 0.55; letter-spacing: 1px; margin-top: 5px; text-transform: none; }
+  #msg { min-height: 22px; font-size: 13px; letter-spacing: 1px; color: #6dffa6; }
+  #msg.err { color: #ff4f4f; }
+  input { width: 100%; background: #06070a; border: 1px solid rgba(255,180,84,0.35); color: #fff; padding: 10px; font-family: inherit; margin-bottom: 20px; border-radius: 3px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Director Console</h1>
+    <p>Streamer-only controls. If DIRECTOR_KEY is set on the server, enter it below. Keep this page off-stream.</p>
+    <input type="password" id="key" placeholder="director key (if configured)" />
+    <button data-act="start">Open the Doors <small>Force a shift lobby to open right now</small></button>
+    <button data-act="bless">Bless the Shift <small>Heal all wounds, danger ×0.6 for the rest of the shift</small></button>
+    <button data-act="curse">Curse the Shift <small>Danger ×1.6 — the Benefactor frowns</small></button>
+    <button data-act="bomb">Drop a Charge <small>Danger ×1.4, loot ×1.5 — chaos, on the house</small></button>
+    <div id="msg"></div>
+  </div>
+  <script>
+    const msg = document.getElementById('msg');
+    document.querySelectorAll('button').forEach((b) =>
+      b.addEventListener('click', async () => {
+        const key = document.getElementById('key').value;
+        const res = await fetch(`/api/director/${b.dataset.act}?key=${encodeURIComponent(key)}`, { method: 'POST' });
+        const ok = res.ok;
+        msg.className = ok ? '' : 'err';
+        msg.textContent = ok ? `✓ ${b.dataset.act} executed` : res.status === 403 ? '✗ bad key' : '✗ not possible right now (wrong phase?)';
+      }),
+    );
+  </script>
+</body>
+</html>
