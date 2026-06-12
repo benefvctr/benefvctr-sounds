@@ -50,7 +50,9 @@ if (CHANNEL) {
     () => engine.phase,
     () => {
       const s = engine.snapshot();
-      return s.vote ? [s.vote.a.word, s.vote.b.word] : null;
+      if (s.vote) return [s.vote.a.word, s.vote.b.word];
+      if (s.action) return [s.action.word];
+      return null;
     },
   );
 }

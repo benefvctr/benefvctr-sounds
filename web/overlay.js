@@ -117,6 +117,20 @@ function render(s) {
     })
     .join('');
 
+  // action callout (non-vote rooms)
+  const a = s.action;
+  $('action').classList.toggle('show', !!a && s.phase === 'room');
+  if (a) {
+    $('action').classList.toggle('brace', a.type === 'brace');
+    $('aword').textContent = `TYPE ${a.word}`;
+    $('aprompt').textContent = a.prompt;
+    $('ameta').textContent =
+      a.type === 'search'
+        ? 'RAIDERS: NEAR-SURE FIND, EXTRA RISK · SPECTATORS: FINDER’S FEE'
+        : 'RAIDERS ONLY: HALF RISK, NO LOOT THIS ROOM';
+    $('acount').textContent = a.type === 'search' ? `${a.actors + a.lurkers}↯` : `${a.actors}⛨`;
+  }
+
   // vote
   const v = s.vote;
   $('vote').classList.toggle('show', !!v && s.phase === 'room');

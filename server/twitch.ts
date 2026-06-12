@@ -81,7 +81,7 @@ const MOCK_AMBIENT = [
   'extract extract extract',
 ];
 
-export function startMockChat(onChat: ChatHandler, getPhase: () => string, getVoteWords: () => [string, string] | null): void {
+export function startMockChat(onChat: ChatHandler, getPhase: () => string, getVoteWords: () => string[] | null): void {
   console.log('[mock] simulated chat running — set TWITCH_CHANNEL to use real chat');
   const enrolled = new Set<string>();
 
@@ -105,8 +105,8 @@ export function startMockChat(onChat: ChatHandler, getPhase: () => string, getVo
       return;
     }
     const words = getVoteWords();
-    if (words && Math.random() < 0.8) {
-      onChat(user, user, Math.random() < 0.55 ? words[0] : words[1]);
+    if (words && words.length > 0 && Math.random() < 0.8) {
+      onChat(user, user, words[Math.floor(Math.random() * words.length)]);
       return;
     }
     if (phase === 'room') {

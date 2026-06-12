@@ -38,7 +38,7 @@ TWITCH_CHANNEL=yourchannel npm run dev
 ## How it plays
 
 1. Every few minutes a **shift opens** and the facility assigns a **wing** — one of six, from the Surface Annex (hazard LOW) down to the Understructure (CATASTROPHIC, rare). Chat types `!deploy` to enter (first `!clockin` to enroll — 100cr + a penlight). Deeper wings hit harder and pay better; casualties are attributed to each wing's **resident entities** (the Floor Manager, the Thing in the Vents, the Below…). The full directory — rooms, residents, hazard/yield meters, tonight's live assignment — is on the companion site.
-2. The squad moves through 4 rooms drawn from that wing's pool (30+ rooms across the facility). Some rooms put a **vote on screen** — anyone in chat can type the vote word, raider or not. Risky options = more danger, more loot; some encounters are straight **FIGHT / FLEE** calls against a resident.
+2. The squad moves through 4 rooms drawn from that wing's pool (30+ rooms across the facility). **Every room has something to type.** Vote rooms put a decision on screen — anyone in chat can type the vote word, raider or not (some are straight **FIGHT / FLEE** calls against a resident). Every other room gets an **action callout**: raiders type `SEARCH` for a near-guaranteed find at extra risk, or `BRACE` to halve their risk and forgo loot — and **spectators who type `SEARCH` collect a small finder's fee**, so even lurkers earn by participating.
 3. Raiders get **wounded** on the first hit, die on the second. A carried light source lowers your odds of being hit — and is **lost forever if you die**.
 4. Survive the extraction sprint to bank your haul (+50cr bonus). Loot goes to your persistent stash.
 

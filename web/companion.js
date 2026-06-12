@@ -45,6 +45,7 @@ function renderLive(s) {
     stat(`${alive}/${s.raiders.length}`, 'alive'),
     stat(`${haul}cr`, 'haul at stake'),
     s.vote ? stat(`${s.vote.a.word} ${s.vote.a.count}–${s.vote.b.count} ${s.vote.b.word}`, 'live vote') : '',
+    s.action ? stat(`${s.action.word} ×${s.action.actors + s.action.lurkers}`, 'live action — type it!') : '',
   ].join('');
   // keep the map's TONIGHT badge in sync with the live shift
   if (s.wing?.id !== lastTonight) {

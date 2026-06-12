@@ -16,6 +16,8 @@ export interface Raider {
   alive: boolean;
   wounded: boolean;
   shield: boolean;
+  searching: boolean; // typed the room's SEARCH action: near-sure loot, extra risk
+  braced: boolean; // typed BRACE: half hit chance, no loot this room
   light: number;
   luck: number; // beacon-boosted loot luck for this shift
   lightItemId?: string; // carried from stash; lost on death, returned on extract
@@ -38,6 +40,31 @@ interface ActiveVote {
   endsAt: number;
   resolved: boolean;
 }
+
+// Rooms without a vote get an action callout instead, so every room of every
+// shift has something for chat to type.
+interface ActiveAction {
+  type: 'search' | 'brace';
+  word: string;
+  prompt: string;
+  endsAt: number;
+  actors: Set<string>; // raiders who typed it
+  lurkers: Set<string>; // enrolled spectators paid a finder's fee (search only)
+}
+
+const SEARCH_PROMPTS = [
+  'Unattended lockers. Loose ceiling tiles. The pockets of the missing.',
+  'Something glints under the floor grating.',
+  'These shelves haven’t been audited in years. Nobody is watching. Probably.',
+  'A supply cart sits abandoned mid-corridor, still warm.',
+];
+const BRACE_PROMPTS = [
+  'The walls shift. Something inhales.',
+  'Footsteps overhead, matching yours. Then doubling.',
+  'The lights flicker in a countdown rhythm.',
+  'The temperature drops by one held breath.',
+];
+const LURKER_FEE = 3; // credits for enrolled spectators who join a SEARCH
 
 export interface EngineEvent {
   type: 'sound' | 'pulse' | 'announce';
@@ -89,6 +116,7 @@ export class Engine {
   raiders = new Map<string, Raider>();
   feed: FeedEntry[] = [];
   vote: ActiveVote | null = null;
+  action: ActiveAction | null = null;
   shiftDanger = 1; // director / bomb modifiers, lasts the shift
   shiftLoot = 1;
   startedAt = 0;
@@ -195,8 +223,28 @@ export class Engine {
         resolved: false,
       };
       this.say('vote', `CHAT DECIDES — type ${room.vote.a.word} or ${room.vote.b.word}`);
+      this.action = null;
     } else {
       this.vote = null;
+      // No vote here — give chat something to type anyway. Dangerous rooms
+      // skew toward BRACE (survive), loose rooms toward SEARCH (profit).
+      const effDanger = room.danger * (this.wing?.danger ?? 1);
+      const brace = this.rng() < Math.min(0.7, Math.max(0.15, (effDanger - 0.9) * 0.8));
+      const prompts = brace ? BRACE_PROMPTS : SEARCH_PROMPTS;
+      this.action = {
+        type: brace ? 'brace' : 'search',
+        word: brace ? 'BRACE' : 'SEARCH',
+        prompt: prompts[Math.floor(this.rng() * prompts.length)],
+        endsAt: this.endsAt - 3000,
+        actors: new Set(),
+        lurkers: new Set(),
+      };
+      this.say(
+        'vote',
+        brace
+          ? 'ACTION — raiders type BRACE to take cover (half risk, no loot this room)'
+          : `ACTION — raiders type SEARCH for a near-sure find (risky) · spectators who SEARCH earn ${LURKER_FEE}cr`,
+      );
     }
   }
 
@@ -215,8 +263,28 @@ export class Engine {
       this.vote = null;
     }
 
+    if (this.action) {
+      const acted = this.action.actors.size;
+      const paid = this.action.lurkers.size;
+      if (this.action.type === 'search' && (acted > 0 || paid > 0)) {
+        const parts = [];
+        if (acted > 0) parts.push(`${acted} raider(s) ransack the room.`);
+        if (paid > 0) parts.push(`Finder's fee paid to ${paid} spectator(s).`);
+        this.say('info', parts.join(' '));
+      } else if (this.action.type === 'brace' && acted > 0) {
+        this.say('info', `${acted} raider(s) brace as it passes.`);
+      }
+    }
+
     this.rollCasualties(room.danger * dangerMod, room.name);
     this.rollLoot(room.loot * lootMod);
+
+    // Action effects last exactly one room.
+    this.action = null;
+    for (const r of this.raiders.values()) {
+      r.searching = false;
+      r.braced = false;
+    }
 
     const next = this.roomIndex + 1;
     if (this.anyAlive() && next < this.rooms.length) {
@@ -279,7 +347,8 @@ export class Engine {
     const wingDanger = this.wing?.danger ?? 1;
     for (const r of this.raiders.values()) {
       if (!r.alive) continue;
-      const hitChance = Math.min(0.6, Math.max(0.02, 0.16 * danger * wingDanger * this.shiftDanger * (1 - r.light)));
+      const base = 0.16 * danger * wingDanger * this.shiftDanger * (1 - r.light);
+      const hitChance = Math.min(0.6, Math.max(0.02, base * (r.braced ? 0.5 : 1) + (r.searching ? 0.04 : 0)));
       if (this.rng() >= hitChance) continue;
       // Attribute the hit to one of the wing's residents.
       const ents = this.wing?.entities ?? [];
@@ -313,7 +382,9 @@ export class Engine {
     const wingLoot = this.wing?.loot ?? 1;
     for (const r of this.raiders.values()) {
       if (!r.alive) continue;
-      const chance = Math.min(0.95, Math.max(0.1, 0.5 * lootFactor * wingLoot * this.shiftLoot * (r.wounded ? 0.5 : 1)));
+      if (r.braced) continue; // heads down, hands empty
+      let chance = Math.min(0.95, Math.max(0.1, 0.5 * lootFactor * wingLoot * this.shiftLoot * (r.wounded ? 0.5 : 1)));
+      if (r.searching) chance = Math.max(chance, 0.9);
       if (this.rng() >= chance) continue;
       const item = rollItem(this.rng, lootFactor * wingLoot * this.shiftLoot * r.luck);
       r.loot.push(item);
@@ -341,6 +412,27 @@ export class Engine {
         if (prev) this.vote[prev].count -= 1;
         this.vote.voters.set(login, pick);
         this.vote[pick].count += 1;
+        return;
+      }
+    }
+
+    // Action words — every non-vote room has one. Raiders act; enrolled
+    // spectators who join a SEARCH collect a small finder's fee.
+    if (this.action && Date.now() < this.action.endsAt) {
+      const word = lower.replace(/^!/, '');
+      if (word === this.action.word.toLowerCase()) {
+        const raider = this.raiders.get(login);
+        if (raider?.alive) {
+          if (!this.action.actors.has(login)) {
+            this.action.actors.add(login);
+            if (this.action.type === 'search') raider.searching = true;
+            else raider.braced = true;
+          }
+        } else if (this.action.type === 'search' && player && !this.action.lurkers.has(login)) {
+          this.action.lurkers.add(login);
+          player.credits += LURKER_FEE;
+          store.markDirty(login);
+        }
         return;
       }
     }
@@ -381,6 +473,8 @@ export class Engine {
           alive: true,
           wounded: false,
           shield: startShield,
+          searching: false,
+          braced: false,
           light: best?.light ?? 0,
           luck: beaconLuck(p.hideout),
           lightItemId: best?.id,
@@ -536,6 +630,17 @@ export class Engine {
       roomIndex: this.roomIndex,
       roomCount: this.rooms.length,
       room: this.phase === 'room' && room ? { name: room.name, intro: room.intro } : null,
+      action:
+        this.action && this.phase === 'room'
+          ? {
+              type: this.action.type,
+              word: this.action.word,
+              prompt: this.action.prompt,
+              actors: this.action.actors.size,
+              lurkers: this.action.lurkers.size,
+              secondsLeft: Math.max(0, Math.ceil((this.action.endsAt - now) / 1000)),
+            }
+          : null,
       vote:
         this.vote && !this.vote.resolved
           ? {

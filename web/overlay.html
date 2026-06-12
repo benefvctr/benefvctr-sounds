@@ -128,6 +128,19 @@
     100% { opacity: 0; transform: translate(-50%, -50%) scale(0.98); }
   }
 
+  /* ---------- action callout (non-vote rooms) ---------- */
+  #action {
+    position: absolute; left: 36px; bottom: 250px;
+    width: var(--vote-width); padding: 12px 16px; display: none;
+  }
+  #action.show { display: flex; align-items: center; gap: 14px; }
+  #action .aword { font-size: 26px; font-weight: bold; letter-spacing: 4px; color: var(--green); white-space: nowrap; animation: blink 1.6s steps(2) infinite; }
+  #action.brace .aword { color: var(--blue); }
+  #action .ainfo { flex: 1; min-width: 0; }
+  #action .aprompt { font-size: 13px; color: #fff; letter-spacing: 0.5px; }
+  #action .ameta { font-size: 11px; opacity: 0.65; margin-top: 4px; letter-spacing: 1px; }
+  #action .acount { font-size: 22px; color: #fff; white-space: nowrap; }
+
   /* ---------- vote panel ---------- */
   #vote {
     /* Anchored bottom-left above the status panel, sized by --vote-width. */
@@ -157,6 +170,15 @@
   <div id="idle" class="panel">
     NIGHT SHIFT // NEXT SHIFT <b id="countdown">--:--</b>
     &nbsp;·&nbsp; <span class="blink">!clockin</span> to enroll · !deploy when doors open
+  </div>
+
+  <div id="action" class="panel">
+    <div class="aword" id="aword"></div>
+    <div class="ainfo">
+      <div class="aprompt" id="aprompt"></div>
+      <div class="ameta" id="ameta"></div>
+    </div>
+    <div class="acount" id="acount"></div>
   </div>
 
   <div id="vote" class="panel">
