@@ -2,12 +2,18 @@
 // periodic flushes of whatever changed. The store keeps the authoritative
 // copy in memory; backends are write-through targets.
 
-import type { DataShape, PlayerRecord, RaidRecord } from '../types.js';
+import type { DataShape, PlayerRecord, RaidRecord, SeasonRecord } from '../types.js';
 
 export interface Backend {
   readonly label: string;
   init(): Promise<void>;
   loadAll(): Promise<DataShape>;
-  /** Persist the players that changed, any new raids, and the raid counter. */
-  flush(dirtyPlayers: PlayerRecord[], newRaids: RaidRecord[], raidCounter: number): Promise<void>;
+  /** Persist what changed: dirty players, new raids, new seasons, and the counters. */
+  flush(
+    dirtyPlayers: PlayerRecord[],
+    newRaids: RaidRecord[],
+    newSeasons: SeasonRecord[],
+    raidCounter: number,
+    season: number,
+  ): Promise<void>;
 }

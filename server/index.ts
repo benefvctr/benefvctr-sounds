@@ -32,9 +32,10 @@ engine.start();
 // ---------------------------------------------------------------- chat in
 // Chat is untrusted input from live viewers. A throw here must never escape to
 // crash the process, so every message is handled defensively.
-const onChat = (login: string, display: string, msg: string) => {
+const onChat = (login: string, display: string, msg: string, bits = 0) => {
   try {
     engine.handleChat(login, display, msg);
+    if (bits > 0) engine.cheer(display, bits); // a big enough cheer arms a season wipe
     // Leak non-command chatter to the companion site's "haunt" layer.
     // The facility is listening.
     if (!msg.startsWith('!')) broadcast({ type: 'chat', display, text: msg.slice(0, 140) });
@@ -112,6 +113,7 @@ function publicPlayer(p: store.PlayerRecord) {
     display: p.display,
     credits: p.credits,
     stats: p.stats,
+    crowns: p.crowns,
     stash,
     stashValue,
     netWorth: p.credits + stashValue,
@@ -131,7 +133,7 @@ const server = createServer(async (req, res) => {
   if (path === '/api/version')
     return json(res, 200, { commit: process.env.RENDER_GIT_COMMIT ?? 'local', startedAt: BOOT_TIME });
   if (path === '/api/config')
-    return json(res, 200, { channel: CHANNEL || null, mock: !CHANNEL, costs: CONFIG.costs, rarityColors: RARITY_COLOR });
+    return json(res, 200, { channel: CHANNEL || null, mock: !CHANNEL, costs: CONFIG.costs, rarityColors: RARITY_COLOR, wipeBits: CONFIG.wipeBits });
   if (path === '/api/leaderboard') {
     const board = store
       .allPlayers()
@@ -145,6 +147,7 @@ const server = createServer(async (req, res) => {
     return p ? json(res, 200, publicPlayer(p)) : json(res, 404, { error: 'not clocked in' });
   }
   if (path === '/api/raids') return json(res, 200, store.recentRaids());
+  if (path === '/api/seasons') return json(res, 200, { season: store.currentSeason(), halloffame: store.recentSeasons() });
   if (path === '/api/map') {
     return json(res, 200, {
       wings: WINGS.map((w) => ({

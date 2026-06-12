@@ -101,6 +101,8 @@ export const CONFIG = {
   roomsPerShift: cfgNum('ROOMS_PER_SHIFT', 4),
   costs: { heal: 30, shield: 40, bomb: 60 },
   extractBonus: 50,
+  wipeBits: cfgNum('WIPE_BITS', 1000), // bits in a single cheer that trigger a wipe
+  wipeCountdownSec: cfgNum('WIPE_COUNTDOWN_SEC', 60),
 };
 
 export class Engine {
@@ -120,6 +122,8 @@ export class Engine {
   shiftDanger = 1; // director / bomb modifiers, lasts the shift
   shiftLoot = 1;
   startedAt = 0;
+  bombsThisShift = 0; // drives escalating !bomb cost; resets each shift
+  wipeState: { endsAt: number; by: string; bits: number } | null = null;
   private rng: () => number = Math.random;
   onEvent: (ev: EngineEvent) => void = () => {};
 
@@ -145,9 +149,43 @@ export class Engine {
     this.onEvent({ type: 'announce', announce: { text, sub, tone } });
   }
 
+  // ---------------------------------------------------------------- wipe
+  /** A cheer of >= the threshold arms the season-ending wipe countdown. */
+  cheer(display: string, bits: number): void {
+    if (bits < CONFIG.wipeBits || this.wipeState) return;
+    this.startWipe(display, bits);
+  }
+
+  private startWipe(by: string, bits: number): void {
+    this.wipeState = { endsAt: Date.now() + CONFIG.wipeCountdownSec * 1000, by, bits };
+    const note = bits > 0 ? `${by} cheered ${bits} bits` : `${by} pulled the lever`;
+    this.say('death', `⚠ THE BENEFACTOR HAS BEEN PAID. ${note}. Season ${store.currentSeason()} ends in ${CONFIG.wipeCountdownSec}s.`);
+    this.announce('WIPE INCOMING', `${note.toUpperCase()} — SEASON ${store.currentSeason()} ENDS`, 'danger');
+    this.onEvent({ type: 'sound', sound: 'bomb' });
+  }
+
+  cancelWipe(): boolean {
+    if (!this.wipeState) return false;
+    this.wipeState = null;
+    this.say('system', 'The wipe is called off. The Benefactor pockets the payment anyway.');
+    this.announce('WIPE AVERTED', 'THE FACILITY EXHALES. RECORDS STAND.', 'good');
+    return true;
+  }
+
+  private executeWipe(): void {
+    const w = this.wipeState;
+    this.wipeState = null;
+    const rec = store.wipe(w?.by, w?.bits);
+    const champ = rec.champions[0];
+    this.say('death', `✖ SEASON ${rec.season} WIPED. ${rec.totalPlayers} accounts reset to zero.${champ ? ` Final champion: ${champ.display} (${champ.netWorth}cr) — crowned.` : ''}`);
+    this.announce(`SEASON ${rec.season} ENDED`, champ ? `${champ.display.toUpperCase()} TAKES THE CROWN — ALL DEBTS CLEARED` : 'ALL DEBTS CLEARED', 'good');
+    this.onEvent({ type: 'pulse', pulse: 'curse' });
+  }
+
   // ---------------------------------------------------------------- tick
   private tick(): void {
     const now = Date.now();
+    if (this.wipeState && now >= this.wipeState.endsAt) this.executeWipe();
     switch (this.phase) {
       case 'idle':
         if (now >= this.nextShiftAt) this.openLobby();
@@ -181,6 +219,7 @@ export class Engine {
     this.vote = null;
     this.shiftDanger = 1;
     this.shiftLoot = 1;
+    this.bombsThisShift = 0;
     this.roomIndex = -1;
     this.startedAt = Date.now();
     // Tonight's assignment: one wing of the facility, rooms drawn from its pool.
@@ -542,11 +581,18 @@ export class Engine {
         break;
       }
       case 'bomb': {
-        this.intervene(player, CONFIG.costs.bomb, () => {
-          if (this.phase !== 'room') return false;
-          this.detonate(display);
-          return true;
-        });
+        // Anti-grief: the price doubles with each charge dropped this shift
+        // (60 → 120 → 240 → 480…), so one person can't spam the squad to death.
+        if (!player || this.phase !== 'room') return;
+        const cost = CONFIG.costs.bomb * Math.pow(2, this.bombsThisShift);
+        if (player.credits < cost) {
+          this.say('system', `${display} reaches for a charge but can't cover the ${cost}cr cost.`);
+          return;
+        }
+        player.credits -= cost;
+        this.bombsThisShift += 1;
+        store.markDirty(player.name);
+        this.detonate(display, cost);
         break;
       }
     }
@@ -567,10 +613,10 @@ export class Engine {
     }
   }
 
-  private detonate(by: string): void {
+  private detonate(by: string, cost?: number): void {
     this.shiftDanger *= 1.4;
     this.shiftLoot *= 1.5;
-    this.say('danger', `💣 ${by} drops a charge into the shift. Walls open. So do other things.`);
+    this.say('danger', `💣 ${by} drops a charge into the shift${cost ? ` (−${cost}cr)` : ''}. Walls open. So do other things.`);
     this.onEvent({ type: 'sound', sound: 'bomb' });
     this.announce('STRUCTURAL BREACH', `${by.toUpperCase()} DROPPED A CHARGE — DANGER RISES. SO DOES THE LOOT.`, 'danger');
   }
@@ -611,6 +657,12 @@ export class Engine {
         if (this.phase !== 'room') return false;
         this.detonate('The Director');
         return true;
+      case 'wipe':
+        if (this.wipeState) return false;
+        this.startWipe('The Director', 0);
+        return true;
+      case 'cancelwipe':
+        return this.cancelWipe();
       default:
         return false;
     }
@@ -624,7 +676,11 @@ export class Engine {
       now,
       phase: this.phase,
       raidId: this.raidId,
+      season: store.currentSeason(),
       intervalSec: this.raidIntervalSec,
+      wipe: this.wipeState
+        ? { secondsLeft: Math.max(0, Math.ceil((this.wipeState.endsAt - now) / 1000)), by: this.wipeState.by, bits: this.wipeState.bits }
+        : null,
       wing: this.phase !== 'idle' && this.wing ? { id: this.wing.id, name: this.wing.name, tier: hazardTier(this.wing.danger) } : null,
       secondsLeft: this.phase === 'idle' ? Math.max(0, Math.ceil((this.nextShiftAt - now) / 1000)) : Math.max(0, Math.ceil((this.endsAt - now) / 1000)),
       roomIndex: this.roomIndex,

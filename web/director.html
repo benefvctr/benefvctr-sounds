@@ -26,6 +26,10 @@
   .row input { margin-bottom: 0; }
   button.mini { width: auto; flex: 1; margin-bottom: 0; padding: 10px 6px; font-size: 12px; letter-spacing: 1px; }
   .note { opacity: 0.5; font-size: 11px; margin-bottom: 0; }
+  .section.danger { border-color: rgba(255,79,79,0.4); }
+  .section.danger h2 { color: #ff4f4f; }
+  #wipebtn { border-color: rgba(255,79,79,0.5); }
+  #wipebtn:hover { border-color: #ff4f4f; background: #2a1416; }
 </style>
 </head>
 <body>
@@ -54,6 +58,13 @@
     <button data-act="bless">Bless the Shift <small>Heal all wounds, danger ×0.6 for the rest of the shift</small></button>
     <button data-act="curse">Curse the Shift <small>Danger ×1.6 — the Benefactor frowns</small></button>
     <button data-act="bomb">Drop a Charge <small>Danger ×1.4, loot ×1.5 — chaos, on the house</small></button>
+
+    <div class="section danger">
+      <h2>Danger Zone <small id="curseason">season …</small></h2>
+      <button data-act="wipe" id="wipebtn">⚠ Trigger Season Wipe <small>Starts the wipe countdown — same as a 1000-bit cheer. Cancel before it fires.</small></button>
+      <button data-act="cancelwipe">Cancel Wipe <small>Call off a wipe currently counting down</small></button>
+    </div>
+
     <div id="msg"></div>
   </div>
   <script>
@@ -68,7 +79,12 @@
       return res.ok;
     }
 
-    document.querySelectorAll('button[data-act]').forEach((b) => b.addEventListener('click', () => call(b.dataset.act)));
+    document.querySelectorAll('button[data-act]').forEach((b) =>
+      b.addEventListener('click', () => {
+        if (b.dataset.act === 'wipe' && !confirm('Start the season wipe countdown? This will reset EVERY account when it fires.')) return;
+        call(b.dataset.act);
+      }),
+    );
     document.querySelectorAll('button[data-sec]').forEach((b) => b.addEventListener('click', () => call('interval', `&sec=${b.dataset.sec}`)));
     document.getElementById('setcust').addEventListener('click', () => {
       const min = parseFloat(document.getElementById('custmin').value);
@@ -80,6 +96,8 @@
         const s = await fetch('/api/state').then((r) => r.json());
         const el = document.getElementById('curint');
         el.textContent = `current: ${s.intervalSec === 0 ? 'back-to-back' : s.intervalSec % 60 === 0 ? s.intervalSec / 60 + ' min' : s.intervalSec + 's'} · phase: ${s.phase}`;
+        document.getElementById('curseason').textContent =
+          `season ${s.season}` + (s.wipe ? ` · WIPING IN ${s.wipe.secondsLeft}s` : '');
       } catch {}
     }
     refreshInterval();

@@ -106,6 +106,19 @@
   .chip.shield { box-shadow: 0 0 8px rgba(95,183,255,0.8); border-color: var(--blue); }
   .chip .haul { color: var(--green); margin-left: 6px; }
 
+  /* ---------- season wipe countdown ---------- */
+  #wipebar {
+    position: absolute; left: 50%; top: 12%; transform: translateX(-50%);
+    text-align: center; display: none; padding: 22px 48px; border: 2px solid var(--red);
+    background: rgba(30, 6, 8, 0.92); border-radius: 6px; box-shadow: 0 0 60px rgba(255, 79, 79, 0.45);
+    animation: wpulse 1s ease-in-out infinite;
+  }
+  #wipebar.show { display: block; }
+  #wipebar .wlabel { color: var(--red); font-size: 16px; letter-spacing: 6px; font-weight: bold; }
+  #wipebar .wsub { color: #fff; font-size: 14px; letter-spacing: 2px; margin: 8px 0; opacity: 0.85; }
+  #wipebar .wclock { color: #fff; font-size: 72px; font-weight: bold; letter-spacing: 6px; line-height: 1.1; text-shadow: 0 0 24px rgba(255, 79, 79, 0.8); }
+  @keyframes wpulse { 50% { box-shadow: 0 0 90px rgba(255, 79, 79, 0.8); border-color: #fff; } }
+
   /* ---------- center-screen event stingers ---------- */
   #announce {
     position: absolute; left: 50%; top: 34%; transform: translate(-50%, -50%);
@@ -164,6 +177,13 @@
 </head>
 <body>
   <div id="pulse"></div>
+
+  <div id="wipebar">
+    <div class="wlabel">⚠ THE BENEFACTOR HAS BEEN PAID ⚠</div>
+    <div class="wsub" id="wsub"></div>
+    <div class="wclock" id="wclock">0:00</div>
+    <div class="wlabel">SEASON WIPE — ALL PROGRESS RESETS</div>
+  </div>
 
   <div id="announce"><div class="big"></div><div class="sub"></div></div>
 

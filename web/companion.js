@@ -33,7 +33,10 @@ function connect() {
 function renderLive(s) {
   const live = s.phase !== 'idle';
   $('live').classList.toggle('on', live);
-  if (live) $('livetext').textContent = `SHIFT #${s.raidId} · ${s.phase.toUpperCase()}`;
+  $('live').classList.toggle('wiping', !!s.wipe);
+  if (s.season) $('seasonline').textContent = `Season ${s.season}`;
+  if (s.wipe) $('livetext').textContent = `⚠ SEASON WIPE IN ${fmt(s.wipe.secondsLeft)}`;
+  else if (live) $('livetext').textContent = `SHIFT #${s.raidId} · ${s.phase.toUpperCase()}`;
   else $('livetext').textContent = `NEXT SHIFT ${fmt(s.secondsLeft)}`;
 
   const alive = s.raiders.filter((r) => r.alive).length;
@@ -96,6 +99,28 @@ async function renderMap() {
     .join('');
 }
 
+// ---------------------------------------------------------------- hall of fame
+function renderHallOfFame(data) {
+  const fame = data?.halloffame ?? [];
+  $('hofsection').style.display = fame.length ? '' : 'none';
+  if (!fame.length) return;
+  $('hof').innerHTML = fame
+    .map((s) => {
+      const champs = s.champions
+        .map(
+          (c, i) =>
+            `<div class="champ ${i === 0 ? 'first' : ''}">${i === 0 ? '<span class="crown">♛</span> ' : `${i + 1}. `}${esc(c.display)} — ${c.netWorth}cr <span class="muted">(${c.extractions} ext · ${c.deaths} deaths)</span></div>`,
+        )
+        .join('');
+      const date = new Date(s.endedAt).toLocaleDateString();
+      return `<div class="hof">
+        <div><div class="snum">S${s.season}</div><div class="smeta">${date}<br>${s.totalPlayers} employees${s.wipedBy ? `<br>wiped by ${esc(s.wipedBy)}${s.bits ? ` (${s.bits} bits)` : ''}` : ''}</div></div>
+        <div class="champs">${champs || '<span class="muted">no survivors of note</span>'}</div>
+      </div>`;
+    })
+    .join('');
+}
+
 // ---------------------------------------------------------------- copy to chat
 function copyBtn(text) {
   return `<button class="copy" data-copy="${esc(text)}">⧉ copy</button>`;
@@ -117,18 +142,21 @@ document.addEventListener('click', async (e) => {
 });
 
 async function refreshBoards() {
-  const [board, raids] = await Promise.all([
+  const [board, raids, seasons] = await Promise.all([
     fetch('/api/leaderboard').then((r) => r.json()),
     fetch('/api/raids').then((r) => r.json()),
+    fetch('/api/seasons').then((r) => r.json()),
   ]);
+  renderHallOfFame(seasons);
   $('board').querySelector('tbody').innerHTML = board
     .map(
       (p, i) => `<tr>
-        <td class="rank">${i + 1}</td><td>${esc(p.display)}</td>
+        <td class="rank">${i + 1}</td><td>${esc(p.display)}${p.crowns ? ` <span class="crown">${'♛'.repeat(Math.min(p.crowns, 5))}</span>` : ''}</td>
         <td class="num cr">${p.credits}</td><td class="num">${p.stashValue}</td>
         <td class="num cr">${p.netWorth}</td>
         <td class="num">${p.stats.shifts}</td><td class="num">${p.stats.extractions}</td>
         <td class="num dead">${p.stats.deaths}</td><td class="num">${p.stats.bestHaul}</td>
+        <td class="num crown">${p.crowns || ''}</td>
       </tr>`,
     )
     .join('');

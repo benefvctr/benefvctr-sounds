@@ -4,7 +4,7 @@
 
 import WebSocket from 'ws';
 
-export type ChatHandler = (login: string, display: string, message: string) => void;
+export type ChatHandler = (login: string, display: string, message: string, bits?: number) => void;
 
 // ---------------------------------------------------------------- real chat
 export function connectTwitch(channel: string, onChat: ChatHandler): void {
@@ -28,7 +28,7 @@ export function connectTwitch(channel: string, onChat: ChatHandler): void {
           continue;
         }
         const msg = parsePrivmsg(line);
-        if (msg) onChat(msg.login, msg.display, msg.text);
+        if (msg) onChat(msg.login, msg.display, msg.text, msg.bits);
       }
     });
     ws.on('close', () => {
@@ -40,7 +40,7 @@ export function connectTwitch(channel: string, onChat: ChatHandler): void {
   connect();
 }
 
-function parsePrivmsg(line: string): { login: string; display: string; text: string } | null {
+function parsePrivmsg(line: string): { login: string; display: string; text: string; bits: number } | null {
   // [@tags ]:login!login@login.tmi.twitch.tv PRIVMSG #chan :text
   let tags = '';
   let rest = line;
@@ -53,10 +53,12 @@ function parsePrivmsg(line: string): { login: string; display: string; text: str
   if (!m) return null;
   const login = m[1].toLowerCase();
   let display = login;
+  let bits = 0;
   for (const t of tags.split(';')) {
     if (t.startsWith('display-name=') && t.length > 13) display = t.slice(13);
+    else if (t.startsWith('bits=')) bits = Number(t.slice(5)) || 0; // present on cheer messages
   }
-  return { login, display, text: m[2] };
+  return { login, display, text: m[2], bits };
 }
 
 // ---------------------------------------------------------------- mock chat
@@ -91,7 +93,7 @@ export function startMockChat(onChat: ChatHandler, getPhase: () => string, getVo
 
     if (!enrolled.has(user)) {
       enrolled.add(user);
-      onChat(user, user, '!clockin');
+      onChat(user, user, '!clockin', 0);
       return;
     }
     // Idle viewers tend their hideout between shifts.

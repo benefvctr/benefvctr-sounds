@@ -51,7 +51,7 @@ TWITCH_CHANNEL=yourchannel npm run dev
 | *vote word* | Vote during room events (e.g. `BREACH` / `SNEAK`) |
 | `!heal [name]` | 30cr — cure a wounded raider |
 | `!shield [name]` | 40cr — block the next hit on a raider |
-| `!bomb` | 60cr — sabotage the shift: danger ×1.4, loot ×1.5 |
+| `!bomb` | sabotage the shift: danger ×1.4, loot ×1.5. Costs 60cr, **doubling each time it's used in a shift** (60 → 120 → 240…) so it can't be spammed to grief the squad |
 | `!collect` | Bank your hideout's passive income |
 | `!upgrade <module>` | Upgrade a hideout module (`generator`/`vault`/`beacon`/`infirmary`) |
 | `!hideout` | Collect and show your hideout summary |

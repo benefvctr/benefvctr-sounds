@@ -23,6 +23,16 @@
   #live { float: right; font-size: 13px; letter-spacing: 2px; padding: 6px 12px; border: 1px solid var(--line); text-transform: uppercase; }
   #live .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #555; margin-right: 7px; }
   #live.on .dot { background: var(--red); animation: blink 1.4s steps(2) infinite; }
+  #live.wiping { border-color: var(--red); color: var(--red); }
+
+  /* ---------- hall of fame ---------- */
+  .hof { display: grid; grid-template-columns: 90px 1fr; gap: 12px; border: 1px solid rgba(255,180,84,0.2); border-radius: 3px; padding: 12px 14px; margin-bottom: 8px; }
+  .hof .snum { color: var(--amber); font-size: 22px; letter-spacing: 2px; }
+  .hof .smeta { font-size: 10px; opacity: 0.5; margin-top: 4px; letter-spacing: 1px; }
+  .hof .champs { font-size: 13px; }
+  .hof .champ { padding: 2px 0; }
+  .hof .champ.first { color: #fff; }
+  .crown { color: var(--amber); }
   @keyframes blink { 50% { opacity: 0.3; } }
 
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
@@ -139,7 +149,7 @@
     <header>
       <div id="live"><span class="dot"></span><span id="livetext">OFFLINE</span></div>
       <h1>Night Shift</h1>
-      <div class="sub">Benefactor Industries · After-Hours Operations Division · Est. ████</div>
+      <div class="sub">Benefactor Industries · After-Hours Operations Division · <span id="seasonline">Season …</span></div>
     </header>
 
     <section class="full">
@@ -178,8 +188,13 @@
       <h2>// Asset Leaderboard <span class="muted">(net worth: credits + stash)</span></h2>
       <table id="board"><thead><tr>
         <th>#</th><th>Employee</th><th class="num">Credits</th><th class="num">Stash</th><th class="num">Net Worth</th>
-        <th class="num">Shifts</th><th class="num">Extracts</th><th class="num">Deaths</th><th class="num">Best Haul</th>
+        <th class="num">Shifts</th><th class="num">Extracts</th><th class="num">Deaths</th><th class="num">Best Haul</th><th class="num">♛</th>
       </tr></thead><tbody></tbody></table>
+    </section>
+
+    <section class="full" id="hofsection" style="display:none">
+      <h2>// Hall of Fame <span class="muted">(champions of wiped seasons — crowns are forever)</span></h2>
+      <div id="hof"></div>
     </section>
 
     <section class="full">

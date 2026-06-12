@@ -117,6 +117,14 @@ function render(s) {
     })
     .join('');
 
+  // season wipe countdown — overrides nothing, sits up top
+  const w = s.wipe;
+  $('wipebar').classList.toggle('show', !!w);
+  if (w) {
+    $('wsub').textContent = `${w.by}${w.bits ? ` · ${w.bits} BITS` : ''}`;
+    $('wclock').textContent = `0:${String(w.secondsLeft).padStart(2, '0')}`;
+  }
+
   // action callout (non-vote rooms)
   const a = s.action;
   $('action').classList.toggle('show', !!a && s.phase === 'room');

@@ -6,7 +6,7 @@
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Backend } from './types.js';
-import { normalizePlayer, type DataShape, type PlayerRecord, type RaidRecord } from '../types.js';
+import { normalizePlayer, type DataShape, type PlayerRecord, type RaidRecord, type SeasonRecord } from '../types.js';
 
 export class SupabaseBackend implements Backend {
   readonly label: string;
@@ -27,12 +27,13 @@ export class SupabaseBackend implements Backend {
   }
 
   async loadAll(): Promise<DataShape> {
-    const data: DataShape = { players: {}, raids: [], raidCounter: 0 };
+    const data: DataShape = { players: {}, raids: [], raidCounter: 0, seasons: [], season: 1 };
 
-    const [players, raids, meta] = await Promise.all([
+    const [players, raids, seasons, meta] = await Promise.all([
       this.db.from('players').select('doc'),
       this.db.from('raids').select('doc').order('id', { ascending: true }).limit(100),
-      this.db.from('meta').select('raid_counter').eq('id', 1).maybeSingle(),
+      this.db.from('seasons').select('doc').order('number', { ascending: true }).limit(200),
+      this.db.from('meta').select('raid_counter, season').eq('id', 1).maybeSingle(),
     ]);
 
     if (players.error) throw players.error;
@@ -42,11 +43,20 @@ export class SupabaseBackend implements Backend {
     }
     if (raids.error) throw raids.error;
     data.raids = (raids.data ?? []).map((r) => r.doc as RaidRecord);
+    if (seasons.error) throw seasons.error;
+    data.seasons = (seasons.data ?? []).map((s) => s.doc as SeasonRecord);
     data.raidCounter = meta.data?.raid_counter ?? 0;
+    data.season = meta.data?.season ?? 1;
     return data;
   }
 
-  async flush(dirtyPlayers: PlayerRecord[], newRaids: RaidRecord[], raidCounter: number): Promise<void> {
+  async flush(
+    dirtyPlayers: PlayerRecord[],
+    newRaids: RaidRecord[],
+    newSeasons: SeasonRecord[],
+    raidCounter: number,
+    season: number,
+  ): Promise<void> {
     const ops: Promise<unknown>[] = [];
 
     if (dirtyPlayers.length) {
@@ -69,8 +79,18 @@ export class SupabaseBackend implements Backend {
         ).then(throwIfError('raids upsert')),
       );
     }
+    if (newSeasons.length) {
+      ops.push(
+        Promise.resolve(
+          this.db.from('seasons').upsert(
+            newSeasons.map((s) => ({ number: s.season, doc: s })),
+            { onConflict: 'number' },
+          ),
+        ).then(throwIfError('seasons upsert')),
+      );
+    }
     ops.push(
-      Promise.resolve(this.db.from('meta').upsert({ id: 1, raid_counter: raidCounter }, { onConflict: 'id' })).then(
+      Promise.resolve(this.db.from('meta').upsert({ id: 1, raid_counter: raidCounter, season }, { onConflict: 'id' })).then(
         throwIfError('meta upsert'),
       ),
     );
