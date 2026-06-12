@@ -9,7 +9,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { Engine, CONFIG } from './game/engine.js';
 import { connectTwitch, startMockChat } from './twitch.js';
 import * as store from './store.js';
-import { ITEM_BY_ID, RARITY_COLOR } from './game/items.js';
+import { COSMETIC_BY_ID, ITEM_BY_ID, RARITY_COLOR } from './game/items.js';
 import { publicHideout } from './game/hideout.js';
 import { WINGS, hazardTier } from './game/rooms.js';
 
@@ -105,7 +105,17 @@ async function serveFile(res: import('node:http').ServerResponse, path: string):
 function publicPlayer(p: store.PlayerRecord) {
   const stash = Object.entries(p.stash).map(([id, qty]) => {
     const def = ITEM_BY_ID.get(id);
-    return { id, qty, name: def?.name ?? id, value: def?.value ?? 0, rarity: def?.rarity ?? 'scrap', light: def?.light ?? 0, flavor: def?.flavor ?? '' };
+    const cos = COSMETIC_BY_ID.get(id);
+    return {
+      id,
+      qty,
+      name: def?.name ?? cos?.name ?? id,
+      value: def?.value ?? cos?.value ?? 0,
+      rarity: def?.rarity ?? cos?.rarity ?? 'scrap',
+      light: def?.light ?? 0,
+      slot: cos?.slot, // present => it's drip
+      flavor: def?.flavor ?? cos?.flavor ?? '',
+    };
   });
   const stashValue = stash.reduce((a, s) => a + s.value * s.qty, 0);
   return {
@@ -114,6 +124,9 @@ function publicPlayer(p: store.PlayerRecord) {
     credits: p.credits,
     stats: p.stats,
     crowns: p.crowns,
+    carry: p.carry,
+    gender: p.gender,
+    cosmetics: p.cosmetics,
     stash,
     stashValue,
     netWorth: p.credits + stashValue,
@@ -149,6 +162,31 @@ const server = createServer(async (req, res) => {
   if (path === '/api/raids') return json(res, 200, store.recentRaids());
   if (path === '/api/seasons') return json(res, 200, { season: store.currentSeason(), halloffame: store.recentSeasons() });
   if (path === '/api/incidents') return json(res, 200, { total: store.incidentCount(), incidents: store.recentIncidents(40) });
+  if (path === '/api/players') {
+    // The employee directory: everyone, lightweight, browsable.
+    const dir = store
+      .allPlayers()
+      .map((p) => {
+        const stashValue = Object.entries(p.stash).reduce(
+          (a, [id, qty]) => a + (ITEM_BY_ID.get(id)?.value ?? COSMETIC_BY_ID.get(id)?.value ?? 0) * qty,
+          0,
+        );
+        return {
+          name: p.name,
+          display: p.display,
+          netWorth: p.credits + stashValue,
+          crowns: p.crowns,
+          gender: p.gender,
+          cosmetics: p.cosmetics,
+          extractions: p.stats.extractions,
+          deaths: p.stats.deaths,
+          lastSeen: p.lastSeen,
+        };
+      })
+      .sort((a, b) => b.netWorth - a.netWorth)
+      .slice(0, 200);
+    return json(res, 200, dir);
+  }
   if (path === '/api/map') {
     return json(res, 200, {
       wings: WINGS.map((w) => ({
@@ -185,6 +223,7 @@ const server = createServer(async (req, res) => {
   if (path === '/' || path === '/index.html') return serveFile(res, join(WEB, 'companion.html'));
   if (path === '/overlay') return serveFile(res, join(WEB, 'overlay.html'));
   if (path === '/director') return serveFile(res, join(WEB, 'director.html'));
+  if (path === '/card') return serveFile(res, join(WEB, 'card.html'));
 
   // --- static assets under /web ---
   const safe = normalize(path).replace(/^([/\\])+/, '');

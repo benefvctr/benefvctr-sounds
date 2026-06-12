@@ -127,6 +127,22 @@
   .stash-item { display: flex; align-items: center; gap: 10px; }
   .stash-item svg { flex-shrink: 0; }
 
+  /* ---------- employee portrait + directory ---------- */
+  .filehead { display: flex; gap: 16px; align-items: flex-start; margin-top: 14px; }
+  .portrait { border: 1px solid var(--line); border-radius: 4px; padding: 8px; background: rgba(0,0,0,0.4); flex-shrink: 0; }
+  .filehead .stats { margin: 0; flex: 1; }
+  .cardlink { display: inline-block; margin-top: 8px; font-size: 11px; letter-spacing: 2px; color: var(--blue); text-decoration: none; border: 1px solid rgba(95,183,255,0.4); padding: 4px 10px; border-radius: 3px; text-transform: uppercase; }
+  .cardlink:hover { background: rgba(95,183,255,0.12); }
+  #directory { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .badge-card {
+    display: flex; gap: 8px; align-items: center; border: 1px solid rgba(255,255,255,0.08); border-radius: 4px;
+    padding: 8px; cursor: pointer; background: rgba(0,0,0,0.25); transition: border-color 0.15s;
+  }
+  .badge-card:hover { border-color: var(--amber); }
+  .badge-card .bn { font-size: 12px; color: #fff; word-break: break-all; }
+  .badge-card .bw { font-size: 10px; color: var(--green); }
+  .badge-card .bc { font-size: 10px; color: var(--amber); }
+
   /* ---------- incident log (graveyard) ---------- */
   #incidents { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 8px; }
   .incident { border: 1px solid rgba(255,79,79,0.18); border-left: 3px solid rgba(255,79,79,0.5); border-radius: 3px; padding: 9px 12px; background: rgba(20,6,8,0.4); font-size: 13px; }
@@ -235,6 +251,12 @@
     </section>
 
     <section class="full">
+      <h2>// Employee Directory <span class="muted">(click a badge to open their file)</span></h2>
+      <input type="text" id="dirsearch" placeholder="search employees…" autocomplete="off" style="margin-bottom:12px" />
+      <div id="directory"></div>
+    </section>
+
+    <section class="full">
       <h2>// Incident Log <span class="muted" id="incidentcount"></span></h2>
       <div id="incidents"></div>
     </section>
@@ -248,6 +270,7 @@
   <div id="ghosts"></div>
   <div id="glitch"></div>
   <script src="/sprites.js"></script>
+  <script src="/avatars.js"></script>
   <script src="/companion.js"></script>
 </body>
 </html>

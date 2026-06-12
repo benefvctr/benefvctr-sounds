@@ -167,7 +167,8 @@ function render(s) {
     .map((r) => {
       const cls = ['chip', !r.alive && 'dead', r.alive && r.wounded && 'wounded', r.alive && r.shield && 'shield'].filter(Boolean).join(' ');
       const haul = r.alive && r.haul > 0 ? `<span class="haul">${r.haul}</span>` : '';
-      return `<span class="${cls}">${escapeHtml(r.display)}${haul}</span>`;
+      const ava = r.look ? window.NS_avatar(r.name, r.look.gender, r.look, 14) : '';
+      return `<span class="${cls}">${ava}${escapeHtml(r.display)}${haul}</span>`;
     })
     .join('');
 

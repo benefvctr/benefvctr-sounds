@@ -55,6 +55,9 @@ TWITCH_CHANNEL=yourchannel npm run dev
 | `!collect` | Bank your hideout's passive income |
 | `!upgrade <module>` | Upgrade a hideout module (`generator`/`vault`/`beacon`/`infirmary`) |
 | `!hideout` | Collect and show your hideout summary |
+| `!carry <item\|auto\|none>` | Pick your deploy loadout (the carried item is lost on death) |
+| `!wear <cosmetic\|none>` | Equip drip you've found on shifts |
+| `!style m` / `!style f` | Retake your employee-file photo (avatar base) |
 
 ## The Hideout (passive income)
 
@@ -92,6 +95,22 @@ ticks up. The director can trigger or cancel a wipe manually.
 
 Every death is immortalized in a permanent graveyard on the companion site —
 the epitaph, the resident that did it, the wing and room. Built for screenshots.
+
+## Employees, drip & player cards
+
+Every player has a deterministic **pixel-art employee avatar** (office attire;
+`!style m`/`!style f` to change the base). Shifts occasionally drop
+**cosmetics** on the same rarity scale — paper hats up to the Warden's Cap and
+the EXIT Sign Halo — worn with `!wear` and rendered on the avatar everywhere it
+appears (squad chips on the overlay, employee file, directory). Cosmetics are
+loot: lost on death before extraction, wiped with the season.
+
+Each player has a **shareable employee card** at `/card?u=<name>` — portrait,
+crowns, stats, notable holdings — with copy-link/share buttons. The
+**Employee Directory** on the site is a searchable grid of every enrolled
+player; click a badge to open their file. The site remembers who you are via
+localStorage (no login needed — all state changes go through chat, where Twitch
+identity is free).
 
 ## The companion site
 

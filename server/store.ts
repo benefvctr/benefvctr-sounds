@@ -10,6 +10,7 @@ import { FileBackend } from './persistence/file.js';
 import { SupabaseBackend } from './persistence/supabase.js';
 import {
   freshEconomy,
+  hashGender,
   normalizePlayer,
   type DataShape,
   type Incident,
@@ -162,6 +163,9 @@ export function createPlayer(name: string, display: string): PlayerRecord {
     name: key,
     display,
     ...freshEconomy(),
+    carry: 'auto',
+    gender: hashGender(key),
+    cosmetics: {},
     crowns: 0,
     clockedInAt: now,
     lastSeen: now,

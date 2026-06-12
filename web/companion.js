@@ -159,6 +159,43 @@ function renderHallOfFame(data) {
     .join('');
 }
 
+// ---------------------------------------------------------------- directory
+let directory = [];
+
+async function refreshDirectory() {
+  try {
+    directory = await fetch('/api/players').then((r) => r.json());
+  } catch {
+    return;
+  }
+  renderDirectory();
+}
+
+function renderDirectory() {
+  const q = $('dirsearch').value.trim().toLowerCase();
+  const list = q ? directory.filter((p) => p.name.includes(q) || p.display.toLowerCase().includes(q)) : directory;
+  $('directory').innerHTML =
+    list
+      .slice(0, 60)
+      .map(
+        (p) => `<div class="badge-card" data-name="${esc(p.name)}">
+          ${window.NS_avatar(p.name, p.gender, p.cosmetics, 30)}
+          <div><div class="bn">${esc(p.display)}${p.crowns ? ` <span class="bc">${'♛'.repeat(Math.min(p.crowns, 3))}</span>` : ''}</div>
+          <div class="bw">${p.netWorth}cr · ${p.extractions} ext</div></div>
+        </div>`,
+      )
+      .join('') || '<p class="muted">No employees match.</p>';
+}
+
+$('dirsearch').addEventListener('input', renderDirectory);
+$('directory').addEventListener('click', (e) => {
+  const card = e.target.closest('.badge-card');
+  if (!card) return;
+  $('lookup').value = card.dataset.name;
+  lookupPlayer();
+  $('lookup').closest('section').scrollIntoView({ behavior: 'smooth' });
+});
+
 // ---------------------------------------------------------------- incident log
 function renderIncidents(data) {
   const list = data?.incidents ?? [];
@@ -204,6 +241,7 @@ async function refreshBoards() {
   ]);
   renderHallOfFame(seasons);
   renderIncidents(incidents);
+  refreshDirectory();
   $('board').querySelector('tbody').innerHTML = board
     .map(
       (p, i) => `<tr>
@@ -254,8 +292,20 @@ async function lookupPlayer() {
     return;
   }
   currentPlayer = await res.json();
+  try {
+    localStorage.setItem('ns_employee', name); // remembered next visit
+  } catch {}
   renderPlayer();
 }
+
+// Remember who you are between visits — no login needed.
+try {
+  const saved = localStorage.getItem('ns_employee');
+  if (saved) {
+    $('lookup').value = saved;
+    setTimeout(lookupPlayer, 400);
+  }
+} catch {}
 
 let currentPlayer = null;
 
@@ -264,12 +314,22 @@ function renderPlayer() {
   if (!p) return;
   const box = $('playerbox');
   const h = p.hideout;
+  const carryLabel =
+    p.carry === 'auto' ? 'auto (best light)' : p.carry === 'none' ? 'nothing' : (p.stash.find((s) => s.id === p.carry)?.name ?? p.carry);
   box.innerHTML = `
-    <div class="stats">
-      ${stat(p.credits + 'cr', 'credits')}
-      ${stat(p.netWorth + 'cr', 'net worth')}
-      ${stat(p.stats.extractions + '/' + p.stats.shifts, 'extract rate')}
-      ${stat(p.stats.bestHaul + 'cr', 'best haul')}
+    <div class="filehead">
+      <div class="portrait">${window.NS_avatar(p.name, p.gender, p.cosmetics, 84)}</div>
+      <div>
+        <div class="stats">
+          ${stat(p.credits + 'cr', 'credits')}
+          ${stat(p.netWorth + 'cr', 'net worth')}
+          ${stat(p.stats.extractions + '/' + p.stats.shifts, 'extract rate')}
+          ${stat(p.stats.bestHaul + 'cr', 'best haul')}
+        </div>
+        <div class="muted" style="margin-top:8px">carrying next deploy: <b style="color:var(--amber)">${esc(carryLabel)}</b>
+          ${copyBtn('!carry auto')} <span class="muted">style: !style m / !style f</span></div>
+        <a class="cardlink" href="/card?u=${encodeURIComponent(p.name)}" target="_blank">⛨ View Employee Card</a>
+      </div>
     </div>
 
     <div class="hideout">
@@ -294,12 +354,17 @@ function renderPlayer() {
 
     <table style="margin-top:18px"><thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Value</th></tr></thead><tbody>
       ${p.stash
-        .map(
-          (s) => `<tr>
-            <td><div class="stash-item">${window.NS_sprite(s.id, s.rarity, 40)}<div><span style="color:${rarityColors[s.rarity] ?? '#fff'}">${esc(s.name)}</span>${s.light ? ' 🔦' : ''}<br><span class="flavor">${esc(s.flavor)}</span></div></div></td>
-            <td class="num">${s.qty}</td><td class="num">${s.value}</td>
-          </tr>`,
-        )
+        .map((s) => {
+          const isDrip = !!s.slot;
+          const worn = isDrip && (p.cosmetics.hat === s.id || p.cosmetics.face === s.id);
+          const act = isDrip
+            ? `${worn ? '<span style="color:var(--green);font-size:11px">✦ worn</span> ' : ''}${copyBtn(`!wear ${s.id}`)}`
+            : copyBtn(`!carry ${s.id}`);
+          return `<tr>
+            <td><div class="stash-item">${window.NS_sprite(s.id, s.rarity, 40)}<div><span style="color:${rarityColors[s.rarity] ?? '#fff'}">${esc(s.name)}</span>${s.light ? ' 🔦' : ''}${isDrip ? ` <span class="muted">✦ drip · ${s.slot}</span>` : ''}<br><span class="flavor">${esc(s.flavor)}</span></div></div></td>
+            <td class="num">${s.qty}</td><td class="num">${s.value}<br>${act}</td>
+          </tr>`;
+        })
         .join('') || '<tr><td colspan="3" class="muted">Stash is empty. Deploy and extract.</td></tr>'}
     </tbody></table>`;
 }

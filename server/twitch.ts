@@ -96,10 +96,15 @@ export function startMockChat(onChat: ChatHandler, getPhase: () => string, getVo
       onChat(user, user, '!clockin', 0);
       return;
     }
-    // Idle viewers tend their hideout between shifts.
-    if ((phase === 'idle' || phase === 'results') && Math.random() < 0.25) {
+    // Idle viewers tend their hideout / drip between shifts.
+    if ((phase === 'idle' || phase === 'results') && Math.random() < 0.3) {
       const modules = ['generator', 'vault', 'beacon', 'infirmary'];
-      onChat(user, user, Math.random() < 0.5 ? '!collect' : `!upgrade ${modules[Math.floor(Math.random() * modules.length)]}`);
+      const drip = ['paperhat', 'trafficcone', 'shades', 'partyhat', 'tapeglasses', 'hardhat'];
+      const r = Math.random();
+      if (r < 0.4) onChat(user, user, '!collect');
+      else if (r < 0.7) onChat(user, user, `!upgrade ${modules[Math.floor(Math.random() * modules.length)]}`);
+      else if (r < 0.9) onChat(user, user, `!wear ${drip[Math.floor(Math.random() * drip.length)]}`);
+      else onChat(user, user, Math.random() < 0.5 ? '!style f' : '!style m');
       return;
     }
     if (phase === 'lobby' && Math.random() < 0.75) {

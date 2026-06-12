@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>NIGHT SHIFT — Employee Card</title>
+<style>
+  :root { --amber: #ffb454; --red: #ff4f4f; --green: #6dffa6; --blue: #5fb7ff; --line: rgba(255,180,84,0.3); }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #08090c; color: #d8d3c8; font-family: 'Courier New', ui-monospace, monospace;
+    min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 12px;
+    background-image: repeating-linear-gradient(0deg, rgba(255,255,255,0.015) 0 1px, transparent 1px 3px);
+  }
+  #card {
+    width: 560px; max-width: 100%; border: 2px solid var(--line); border-radius: 8px;
+    background: linear-gradient(180deg, #101218, #0c0a10); padding: 24px; position: relative; overflow: hidden;
+  }
+  #card::after { content: ''; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0 1px, transparent 1px 3px); }
+  .brand { font-size: 10px; letter-spacing: 4px; color: var(--amber); text-transform: uppercase; opacity: 0.8; }
+  .head { display: flex; gap: 20px; margin-top: 14px; align-items: flex-start; }
+  .portrait { border: 1px solid var(--line); border-radius: 4px; padding: 10px; background: rgba(0,0,0,0.4); }
+  .who h1 { color: #fff; font-size: 26px; letter-spacing: 2px; word-break: break-all; }
+  .who .crowns { color: var(--amber); font-size: 18px; }
+  .who .title { font-size: 11px; letter-spacing: 2px; opacity: 0.55; text-transform: uppercase; margin-top: 6px; }
+  .who .drip { font-size: 11px; color: var(--blue); margin-top: 8px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 18px; }
+  .stat { border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; padding: 8px 10px; }
+  .stat b { display: block; color: #fff; font-size: 18px; }
+  .stat span { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; opacity: 0.5; }
+  h3 { font-size: 11px; letter-spacing: 3px; color: var(--amber); text-transform: uppercase; margin: 18px 0 8px; }
+  .items { display: flex; gap: 10px; flex-wrap: wrap; }
+  .item { text-align: center; width: 72px; font-size: 9px; letter-spacing: 0.5px; }
+  .item .nm { margin-top: 3px; opacity: 0.8; }
+  footer { margin-top: 18px; font-size: 9px; letter-spacing: 2px; opacity: 0.35; text-transform: uppercase; text-align: center; }
+  .actions { display: flex; gap: 10px; margin-top: 16px; }
+  .actions button {
+    flex: 1; background: transparent; border: 1px solid var(--line); color: var(--amber);
+    font-family: inherit; font-size: 12px; letter-spacing: 2px; padding: 10px; border-radius: 4px; cursor: pointer; text-transform: uppercase;
+  }
+  .actions button:hover { background: rgba(255,180,84,0.1); }
+  #err { color: var(--red); text-align: center; }
+</style>
+</head>
+<body>
+  <div id="card"><div id="err">LOCATING EMPLOYEE FILE…</div></div>
+  <script src="/sprites.js"></script>
+  <script src="/avatars.js"></script>
+  <script>
+    const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const u = new URLSearchParams(location.search).get('u') || '';
+
+    async function load() {
+      const card = document.getElementById('card');
+      try {
+        const [p, seasons] = await Promise.all([
+          fetch(`/api/player/${encodeURIComponent(u.toLowerCase())}`).then((r) => { if (!r.ok) throw 0; return r.json(); }),
+          fetch('/api/seasons').then((r) => r.json()),
+        ]);
+        const top = [...p.stash].sort((a, b) => b.value - a.value).slice(0, 5);
+        const drip = p.stash.filter((s) => s.slot);
+        const rate = p.stats.shifts ? Math.round((p.stats.extractions / p.stats.shifts) * 100) : 0;
+        card.innerHTML = `
+          <div class="brand">Benefactor Industries · Night Shift · Season ${seasons.season}</div>
+          <div class="head">
+            <div class="portrait">${NS_avatar(p.name, p.gender, p.cosmetics, 110)}</div>
+            <div class="who">
+              <h1>${esc(p.display)}</h1>
+              ${p.crowns ? `<div class="crowns">${'♛'.repeat(Math.min(p.crowns, 5))} ×${p.crowns}</div>` : ''}
+              <div class="title">${p.crowns ? 'Decorated ' : ''}Night-Shift Employee · ${rate}% extract rate</div>
+              ${drip.length ? `<div class="drip">✦ ${drip.map((d) => esc(d.name)).join(' · ')}</div>` : ''}
+            </div>
+          </div>
+          <div class="grid">
+            <div class="stat"><b>${p.netWorth}cr</b><span>net worth</span></div>
+            <div class="stat"><b>${p.stats.extractions}/${p.stats.shifts}</b><span>extractions</span></div>
+            <div class="stat"><b>${p.stats.deaths}</b><span>deaths</span></div>
+            <div class="stat"><b>${p.stats.bestHaul}cr</b><span>best haul</span></div>
+            <div class="stat"><b>${p.stats.bounties}</b><span>bounties</span></div>
+            <div class="stat"><b>G${p.hideout.modules.find((m) => m.id === 'generator').level} V${p.hideout.modules.find((m) => m.id === 'vault').level}</b><span>hideout</span></div>
+          </div>
+          ${top.length ? `<h3>// Notable Holdings</h3><div class="items">${top.map((s) => `<div class="item">${NS_sprite(s.id, s.rarity, 52, true)}<div class="nm">${esc(s.name)}</div></div>`).join('')}</div>` : ''}
+          <div class="actions">
+            <button id="copylink">⧉ Copy Link</button>
+            <button id="share">Share</button>
+          </div>
+          <footer>this employee is the property of the facility · benefvctr on twitch</footer>`;
+
+        document.getElementById('copylink').onclick = async (e) => {
+          await navigator.clipboard.writeText(location.href).catch(() => {});
+          e.target.textContent = '✓ Copied';
+          setTimeout(() => (e.target.textContent = '⧉ Copy Link'), 1500);
+        };
+        document.getElementById('share').onclick = () => {
+          if (navigator.share) navigator.share({ title: `${p.display} — NIGHT SHIFT employee card`, url: location.href }).catch(() => {});
+          else document.getElementById('copylink').click();
+        };
+      } catch {
+        card.innerHTML = `<div id="err">NO EMPLOYEE FILE FOR "${esc(u)}" — type !clockin in chat to enroll</div>`;
+      }
+    }
+    load();
+  </script>
+</body>
+</html>

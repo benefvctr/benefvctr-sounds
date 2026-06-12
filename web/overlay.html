@@ -100,7 +100,10 @@
   .chip {
     font-size: 13px; padding: 4px 9px; border: 1px solid var(--line); border-radius: 3px;
     color: #fff; background: rgba(255,180,84,0.08); letter-spacing: 1px;
+    display: inline-flex; align-items: center; gap: 6px;
   }
+  .chip svg { display: block; }
+  .chip.dead svg { filter: grayscale(1) brightness(0.5); }
   .chip.dead { color: rgba(255,79,79,0.8); border-color: rgba(255,79,79,0.4); text-decoration: line-through; background: transparent; }
   .chip.wounded { color: var(--red); border-color: var(--red); }
   .chip.shield { box-shadow: 0 0 8px rgba(95,183,255,0.8); border-color: var(--blue); }
@@ -270,6 +273,7 @@
   <div id="lootlayer"></div>
 
   <script src="/sprites.js"></script>
+  <script src="/avatars.js"></script>
   <script src="/overlay.js"></script>
 </body>
 </html>

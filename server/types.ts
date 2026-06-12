@@ -15,6 +15,9 @@ export interface PlayerRecord {
   display: string;
   credits: number;
   stash: Record<string, number>; // itemId -> qty
+  carry: string; // deploy loadout: 'auto' (best light), 'none', or an itemId
+  gender: 'm' | 'f'; // avatar base; settable via !style, defaults from name hash
+  cosmetics: { hat?: string; face?: string }; // equipped drip (must stay in stash)
   stats: {
     shifts: number;
     extractions: number;
@@ -75,11 +78,15 @@ export function defaultHideout(): HideoutState {
   return { generator: 1, vault: 1, beacon: 0, infirmary: 0 };
 }
 
-/** The resettable economy fields, shared by enrollment and by a season wipe. */
+/** The resettable economy fields, shared by enrollment and by a season wipe.
+ *  (Cosmetics and carry reset too — the items they reference are wiped.
+ *  Gender/identity persists.) */
 export function freshEconomy() {
   return {
     credits: 100,
     stash: { penlight: 1 } as Record<string, number>,
+    carry: 'auto',
+    cosmetics: {} as { hat?: string; face?: string },
     stats: { shifts: 0, extractions: 0, deaths: 0, lootValue: 0, bestHaul: 0, bounties: 0 },
     hideout: defaultHideout(),
     incomeCollectedAt: Date.now(),
@@ -96,5 +103,15 @@ export function normalizePlayer(p: PlayerRecord): PlayerRecord {
   if (typeof p.incomeCollectedAt !== 'number') p.incomeCollectedAt = Date.now();
   if (typeof p.crowns !== 'number') p.crowns = 0;
   if (typeof p.stats.bounties !== 'number') p.stats.bounties = 0;
+  if (typeof p.carry !== 'string') p.carry = 'auto';
+  if (p.gender !== 'm' && p.gender !== 'f') p.gender = hashGender(p.name);
+  if (!p.cosmetics || typeof p.cosmetics !== 'object') p.cosmetics = {};
   return p;
+}
+
+/** Stable default avatar base derived from the login. */
+export function hashGender(name: string): 'm' | 'f' {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return h % 2 ? 'f' : 'm';
 }

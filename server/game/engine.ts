@@ -2,7 +2,7 @@
 // One instance per channel. Ticks at 1Hz, runs the shift (raid) state
 // machine, consumes chat commands, and emits snapshots + one-shot events.
 
-import { ITEM_BY_ID, ITEMS, rollItem, type ItemDef } from './items.js';
+import { COSMETICS, COSMETIC_BY_ID, ITEM_BY_ID, ITEMS, rollCosmetic, rollItem, type ItemDef } from './items.js';
 import { pickWing, hazardTier, type RoomDef, type WingDef } from './rooms.js';
 import { beaconLuck, infirmaryShieldChance, collect, upgrade, MODULE_INFO } from './hideout.js';
 import type { HideoutModule } from '../types.js';
@@ -21,6 +21,7 @@ export interface Raider {
   light: number;
   luck: number; // beacon-boosted loot luck for this shift
   lightItemId?: string; // carried from stash; lost on death, returned on extract
+  look: { gender: 'm' | 'f'; hat?: string; face?: string }; // avatar, frozen at deploy
   loot: ItemDef[];
   haul: number;
   deathLine?: string;
@@ -472,6 +473,17 @@ export class Engine {
       this.say('loot', `${r.display} finds ${item.name} (${item.value}cr)${isBounty ? ' ★ BOUNTY ITEM' : ''}`);
       this.onEvent({ type: 'loot', loot: { display: r.display, itemId: item.id, name: item.name, value: item.value, rarity: item.rarity, bounty: isBounty } });
     }
+    // Drip drops: an independent low-chance cosmetic find. Lost on death like
+    // any other loot — fashion has stakes too.
+    for (const r of this.raiders.values()) {
+      if (!r.alive || r.braced) continue;
+      if (this.rng() >= 0.08) continue;
+      const c = rollCosmetic(this.rng, wingLoot * this.shiftLoot * r.luck);
+      r.loot.push(c);
+      r.haul += c.value;
+      this.say('loot', `${r.display} finds ${c.name} ✦ DRIP (${c.slot})`);
+      this.onEvent({ type: 'loot', loot: { display: r.display, itemId: c.id, name: c.name, value: c.value, rarity: c.rarity } });
+    }
   }
 
   // ---------------------------------------------------------------- chat
@@ -534,11 +546,18 @@ export class Engine {
         if (this.phase !== 'lobby') return;
         const p = player ?? store.createPlayer(login, display);
         if (this.raiders.has(login)) return;
-        // Auto-carry the best light source from stash; it's at stake.
+        // Loadout: honor !carry preference, else auto-carry the best light
+        // source from stash. Whatever is carried is at stake.
         let best: ItemDef | undefined;
-        for (const [id, qty] of Object.entries(p.stash)) {
-          const def = ITEM_BY_ID.get(id);
-          if (def?.light && qty > 0 && (!best || def.light > best.light!)) best = def;
+        if (p.carry === 'none') {
+          best = undefined;
+        } else if (p.carry !== 'auto' && (p.stash[p.carry] ?? 0) > 0 && ITEM_BY_ID.has(p.carry)) {
+          best = ITEM_BY_ID.get(p.carry);
+        } else {
+          for (const [id, qty] of Object.entries(p.stash)) {
+            const def = ITEM_BY_ID.get(id);
+            if (def?.light && qty > 0 && (!best || (def.light ?? 0) > (best.light ?? 0))) best = def;
+          }
         }
         if (best) {
           p.stash[best.id] -= 1;
@@ -559,6 +578,7 @@ export class Engine {
           light: best?.light ?? 0,
           luck: beaconLuck(p.hideout),
           lightItemId: best?.id,
+          look: { gender: p.gender, hat: p.cosmetics.hat, face: p.cosmetics.face },
           loot: [],
           haul: 0,
         });
@@ -566,6 +586,59 @@ export class Engine {
           .filter(Boolean)
           .join(' ');
         this.say('info', `${display} deploys ${extras}`);
+        break;
+      }
+      case 'carry': {
+        // Pick the deploy loadout: !carry auto | none | <item name/id>
+        if (!player) return;
+        const want = args.join(' ');
+        if (want === 'auto' || want === '') {
+          player.carry = 'auto';
+          this.say('system', `${display} will auto-carry their best light.`);
+        } else if (want === 'none' || want === 'nothing') {
+          player.carry = 'none';
+          this.say('system', `${display} will deploy empty-handed. Bold.`);
+        } else {
+          const def = ITEMS.find((i) => i.id === want) ?? ITEMS.find((i) => i.name.toLowerCase().includes(want));
+          if (!def) return;
+          if ((player.stash[def.id] ?? 0) <= 0) {
+            this.say('system', `${display} doesn't own a ${def.name}.`);
+            return;
+          }
+          player.carry = def.id;
+          this.say('system', `${display} will carry ${def.name} next deploy${def.light ? '' : ' (it sheds no light — pure flex)'}.`);
+        }
+        store.markDirty(login);
+        break;
+      }
+      case 'wear': {
+        // Equip drip: !wear <cosmetic name/id> | none
+        if (!player) return;
+        const want = args.join(' ');
+        if (want === 'none' || want === '') {
+          player.cosmetics = {};
+          this.say('system', `${display} returns to regulation office attire.`);
+        } else {
+          const def = COSMETICS.find((c) => c.id === want) ?? COSMETICS.find((c) => c.name.toLowerCase().includes(want));
+          if (!def) return;
+          if ((player.stash[def.id] ?? 0) <= 0) {
+            this.say('system', `${display} doesn't own a ${def.name}. Find one on a shift.`);
+            return;
+          }
+          player.cosmetics[def.slot] = def.id;
+          this.say('system', `${display} puts on the ${def.name}. ✦ drip`);
+        }
+        store.markDirty(login);
+        break;
+      }
+      case 'style': {
+        // Avatar base: !style m|f
+        if (!player) return;
+        const want = (args[0] ?? '')[0];
+        if (want !== 'm' && want !== 'f') return;
+        player.gender = want;
+        store.markDirty(login);
+        this.say('system', `${display}'s employee file photo has been retaken.`);
         break;
       }
       case 'hideout':
@@ -761,6 +834,7 @@ export class Engine {
             }
           : null,
       raiders: [...this.raiders.values()].map((r) => ({
+        name: r.name,
         display: r.display,
         alive: r.alive,
         wounded: r.wounded,
@@ -768,6 +842,7 @@ export class Engine {
         haul: r.haul,
         lootCount: r.loot.length,
         light: r.light,
+        look: r.look,
       })),
       feed: this.feed,
     };
