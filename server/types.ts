@@ -21,6 +21,7 @@ export interface PlayerRecord {
     deaths: number;
     lootValue: number; // lifetime extracted value
     bestHaul: number;
+    bounties: number; // bounty contracts claimed
   };
   hideout: HideoutState;
   incomeCollectedAt: number; // last time passive income was banked
@@ -47,12 +48,27 @@ export interface SeasonRecord {
   champions: { name: string; display: string; netWorth: number; extractions: number; deaths: number; bestHaul: number }[];
 }
 
+/** A death, immortalized in the Incident Log. The graveyard. */
+export interface Incident {
+  id: number;
+  t: number;
+  name: string;
+  display: string;
+  line: string; // the epitaph
+  by?: string; // resident entity that did it
+  wing?: string;
+  room?: string;
+  season: number;
+}
+
 export interface DataShape {
   players: Record<string, PlayerRecord>;
   raids: RaidRecord[];
   raidCounter: number;
   seasons: SeasonRecord[];
   season: number; // current season number (1-based)
+  incidents: Incident[];
+  incidentCounter: number;
 }
 
 export function defaultHideout(): HideoutState {
@@ -64,7 +80,7 @@ export function freshEconomy() {
   return {
     credits: 100,
     stash: { penlight: 1 } as Record<string, number>,
-    stats: { shifts: 0, extractions: 0, deaths: 0, lootValue: 0, bestHaul: 0 },
+    stats: { shifts: 0, extractions: 0, deaths: 0, lootValue: 0, bestHaul: 0, bounties: 0 },
     hideout: defaultHideout(),
     incomeCollectedAt: Date.now(),
   };
@@ -79,5 +95,6 @@ export function normalizePlayer(p: PlayerRecord): PlayerRecord {
   }
   if (typeof p.incomeCollectedAt !== 'number') p.incomeCollectedAt = Date.now();
   if (typeof p.crowns !== 'number') p.crowns = 0;
+  if (typeof p.stats.bounties !== 'number') p.stats.bounties = 0;
   return p;
 }

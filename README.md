@@ -73,6 +73,36 @@ or days away. Manage it on the companion site or via chat.
 The vault cap is the hook: a daily viewer who never upgrades the vault leaves
 credits on the table, which nudges them to invest and check back.
 
+## Bounties
+
+Every shift names a **wanted artifact** (biased toward rares). The first raider
+to **extract** it claims a credit reward on top of their haul. Shown on the
+overlay, the companion live panel, and called out in the feed. The director can
+reroll it from the console.
+
+## Seasonal wipes & the Hall of Fame
+
+A single cheer of `WIPE_BITS` bits (default 1000 ≈ $10) arms a ~60s **wipe
+countdown** on the overlay. When it fires, the standings are snapshotted into a
+permanent **Hall of Fame**, the #1 player earns a **crown** (which survives all
+future wipes), and every account resets to a fresh economy as the season number
+ticks up. The director can trigger or cancel a wipe manually.
+
+## The Incident Log
+
+Every death is immortalized in a permanent graveyard on the companion site —
+the epitaph, the resident that did it, the wing and room. Built for screenshots.
+
+## The companion site
+
+- **Facility Schematic** — a live SVG cross-section of all six wings; the
+  assigned wing pulses and a marker tracks the squad's depth in real time.
+- **Item sigils** — every artifact has a unique procedural emblem (rarity-framed)
+  in the stash and on overlay loot drops.
+- **The haunt** — live chat bleeds across the page as ghosts; the facility
+  whispers back, and occasionally the page glitches, shakes, or briefly corrupts
+  into containment glyphs.
+
 `!heal` / `!shield` / `!bomb` trigger the channel's alert sounds
 (`Health.wav`, `Shield_Charge.wav`, `bomb_dropped.wav`) through the overlay.
 

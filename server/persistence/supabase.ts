@@ -5,8 +5,8 @@
 // in-memory shape exactly. See supabase/migrations for the table definitions.
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { Backend } from './types.js';
-import { normalizePlayer, type DataShape, type PlayerRecord, type RaidRecord, type SeasonRecord } from '../types.js';
+import type { Backend, FlushDelta } from './types.js';
+import { normalizePlayer, type DataShape, type Incident, type PlayerRecord, type RaidRecord, type SeasonRecord } from '../types.js';
 
 export class SupabaseBackend implements Backend {
   readonly label: string;
@@ -27,13 +27,14 @@ export class SupabaseBackend implements Backend {
   }
 
   async loadAll(): Promise<DataShape> {
-    const data: DataShape = { players: {}, raids: [], raidCounter: 0, seasons: [], season: 1 };
+    const data: DataShape = { players: {}, raids: [], raidCounter: 0, seasons: [], season: 1, incidents: [], incidentCounter: 0 };
 
-    const [players, raids, seasons, meta] = await Promise.all([
+    const [players, raids, seasons, incidents, meta] = await Promise.all([
       this.db.from('players').select('doc'),
       this.db.from('raids').select('doc').order('id', { ascending: true }).limit(100),
       this.db.from('seasons').select('doc').order('number', { ascending: true }).limit(200),
-      this.db.from('meta').select('raid_counter, season').eq('id', 1).maybeSingle(),
+      this.db.from('incidents').select('doc').order('id', { ascending: true }).limit(1000),
+      this.db.from('meta').select('raid_counter, season, incident_counter').eq('id', 1).maybeSingle(),
     ]);
 
     if (players.error) throw players.error;
@@ -45,54 +46,52 @@ export class SupabaseBackend implements Backend {
     data.raids = (raids.data ?? []).map((r) => r.doc as RaidRecord);
     if (seasons.error) throw seasons.error;
     data.seasons = (seasons.data ?? []).map((s) => s.doc as SeasonRecord);
+    if (incidents.error) throw incidents.error;
+    data.incidents = (incidents.data ?? []).map((i) => i.doc as Incident);
     data.raidCounter = meta.data?.raid_counter ?? 0;
     data.season = meta.data?.season ?? 1;
+    data.incidentCounter = meta.data?.incident_counter ?? 0;
     return data;
   }
 
-  async flush(
-    dirtyPlayers: PlayerRecord[],
-    newRaids: RaidRecord[],
-    newSeasons: SeasonRecord[],
-    raidCounter: number,
-    season: number,
-  ): Promise<void> {
+  async flush(d: FlushDelta): Promise<void> {
     const ops: Promise<unknown>[] = [];
 
-    if (dirtyPlayers.length) {
+    if (d.players.length) {
       ops.push(
         Promise.resolve(
           this.db.from('players').upsert(
-            dirtyPlayers.map((p) => ({ login: p.name, doc: p, updated_at: new Date().toISOString() })),
+            d.players.map((p) => ({ login: p.name, doc: p, updated_at: new Date().toISOString() })),
             { onConflict: 'login' },
           ),
         ).then(throwIfError('players upsert')),
       );
     }
-    if (newRaids.length) {
+    if (d.raids.length) {
       ops.push(
-        Promise.resolve(
-          this.db.from('raids').upsert(
-            newRaids.map((r) => ({ id: r.id, doc: r })),
-            { onConflict: 'id' },
-          ),
-        ).then(throwIfError('raids upsert')),
+        Promise.resolve(this.db.from('raids').upsert(d.raids.map((r) => ({ id: r.id, doc: r })), { onConflict: 'id' })).then(
+          throwIfError('raids upsert'),
+        ),
       );
     }
-    if (newSeasons.length) {
+    if (d.seasons.length) {
       ops.push(
         Promise.resolve(
-          this.db.from('seasons').upsert(
-            newSeasons.map((s) => ({ number: s.season, doc: s })),
-            { onConflict: 'number' },
-          ),
+          this.db.from('seasons').upsert(d.seasons.map((s) => ({ number: s.season, doc: s })), { onConflict: 'number' }),
         ).then(throwIfError('seasons upsert')),
       );
     }
+    if (d.incidents.length) {
+      ops.push(
+        Promise.resolve(this.db.from('incidents').upsert(d.incidents.map((i) => ({ id: i.id, doc: i })), { onConflict: 'id' })).then(
+          throwIfError('incidents upsert'),
+        ),
+      );
+    }
     ops.push(
-      Promise.resolve(this.db.from('meta').upsert({ id: 1, raid_counter: raidCounter, season }, { onConflict: 'id' })).then(
-        throwIfError('meta upsert'),
-      ),
+      Promise.resolve(
+        this.db.from('meta').upsert({ id: 1, raid_counter: d.raidCounter, season: d.season, incident_counter: d.incidentCounter }, { onConflict: 'id' }),
+      ).then(throwIfError('meta upsert')),
     );
 
     await Promise.all(ops);

@@ -12,21 +12,23 @@ import {
   freshEconomy,
   normalizePlayer,
   type DataShape,
+  type Incident,
   type PlayerRecord,
   type RaidRecord,
   type SeasonRecord,
 } from './types.js';
 import { ITEM_BY_ID } from './game/items.js';
 
-export type { PlayerRecord, RaidRecord, SeasonRecord } from './types.js';
+export type { PlayerRecord, RaidRecord, SeasonRecord, Incident } from './types.js';
 
-let data: DataShape = { players: {}, raids: [], raidCounter: 0, seasons: [], season: 1 };
+let data: DataShape = { players: {}, raids: [], raidCounter: 0, seasons: [], season: 1, incidents: [], incidentCounter: 0 };
 let backend: Backend;
 
 // Change tracking, so a flush only ships what actually moved.
 const dirtyPlayers = new Set<string>();
 const pendingRaids: RaidRecord[] = [];
 const pendingSeasons: SeasonRecord[] = [];
+const pendingIncidents: Incident[] = [];
 let flushing = false;
 
 function chooseBackend(): Backend {
@@ -42,6 +44,8 @@ export async function init(): Promise<void> {
   data = await backend.loadAll();
   if (!Array.isArray(data.seasons)) data.seasons = [];
   if (typeof data.season !== 'number') data.season = 1;
+  if (!Array.isArray(data.incidents)) data.incidents = [];
+  if (typeof data.incidentCounter !== 'number') data.incidentCounter = 0;
   for (const p of Object.values(data.players)) normalizePlayer(p);
   console.log(`[store] backend: ${backend.label} — ${Object.keys(data.players).length} player(s) loaded, season ${data.season}`);
 
@@ -58,15 +62,25 @@ async function flush(): Promise<void> {
   const players = [...dirtyPlayers].map((n) => data.players[n]).filter(Boolean);
   const raids = pendingRaids.splice(0);
   const seasons = pendingSeasons.splice(0);
+  const incidents = pendingIncidents.splice(0);
   dirtyPlayers.clear();
 
   try {
-    await backend.flush(players, raids, seasons, data.raidCounter, data.season);
+    await backend.flush({
+      players,
+      raids,
+      seasons,
+      incidents,
+      raidCounter: data.raidCounter,
+      season: data.season,
+      incidentCounter: data.incidentCounter,
+    });
   } catch (err) {
     // Re-queue so nothing is lost; try again next tick.
     for (const p of players) dirtyPlayers.add(p.name);
     pendingRaids.unshift(...raids);
     pendingSeasons.unshift(...seasons);
+    pendingIncidents.unshift(...incidents);
     console.error('[store] flush failed, will retry:', (err as Error).message);
   } finally {
     flushing = false;
@@ -174,4 +188,20 @@ export function recordRaid(r: RaidRecord): void {
 
 export function recentRaids(n = 20): RaidRecord[] {
   return data.raids.slice(-n).reverse();
+}
+
+export function addIncident(i: Omit<Incident, 'id'>): void {
+  data.incidentCounter += 1;
+  const rec: Incident = { ...i, id: data.incidentCounter };
+  data.incidents.push(rec);
+  if (data.incidents.length > 1000) data.incidents = data.incidents.slice(-1000);
+  pendingIncidents.push(rec);
+}
+
+export function recentIncidents(n = 40): Incident[] {
+  return data.incidents.slice(-n).reverse();
+}
+
+export function incidentCount(): number {
+  return data.incidentCounter;
 }

@@ -148,6 +148,7 @@ const server = createServer(async (req, res) => {
   }
   if (path === '/api/raids') return json(res, 200, store.recentRaids());
   if (path === '/api/seasons') return json(res, 200, { season: store.currentSeason(), halloffame: store.recentSeasons() });
+  if (path === '/api/incidents') return json(res, 200, { total: store.incidentCount(), incidents: store.recentIncidents(40) });
   if (path === '/api/map') {
     return json(res, 200, {
       wings: WINGS.map((w) => ({

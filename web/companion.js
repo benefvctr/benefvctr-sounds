@@ -47,12 +47,16 @@ function renderLive(s) {
     stat(fmt(s.secondsLeft), live ? 'time left' : 'until doors'),
     stat(`${alive}/${s.raiders.length}`, 'alive'),
     stat(`${haul}cr`, 'haul at stake'),
+    s.bounty ? stat(s.bounty.claimedBy ? 'CLAIMED' : `+${s.bounty.reward}cr`, `★ bounty: ${s.bounty.name}`) : '',
     s.vote ? stat(`${s.vote.a.word} ${s.vote.a.count}–${s.vote.b.count} ${s.vote.b.word}`, 'live vote') : '',
     s.action ? stat(`${s.action.word} ×${s.action.actors + s.action.lurkers}`, 'live action — type it!') : '',
   ].join('');
-  // keep the map's TONIGHT badge in sync with the live shift
-  if (s.wing?.id !== lastTonight) {
+  // keep the schematic in sync: re-render when the wing or the squad's room moves
+  const posKey = `${s.wing?.id}|${s.phase}|${s.roomIndex}`;
+  liveState = s;
+  if (s.wing?.id !== lastTonight || posKey !== lastPosKey) {
     lastTonight = s.wing?.id ?? null;
+    lastPosKey = posKey;
     renderMap();
   }
 
@@ -62,12 +66,17 @@ function renderLive(s) {
 const stat = (v, l) => `<div class="stat"><b>${esc(v)}</b><span>${esc(l)}</span></div>`;
 const fmt = (sec) => `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
 
-// ---------------------------------------------------------------- facility map
+// ---------------------------------------------------------------- facility schematic
 let mapData = null;
 let lastTonight = null;
+let lastPosKey = null;
+let liveState = null; // latest snapshot, for live position on the map
 
 const TIER_COLOR = { LOW: '#7fd47f', STANDARD: '#d8d3c8', ELEVATED: '#ffb454', SEVERE: '#ff8a4f', CATASTROPHIC: '#ff4f4f' };
 
+// A vertical cross-section of the facility: six wings stacked surface→deep,
+// an elevator shaft down the left, the tonight sector pulsing, and a live
+// marker tracking the squad's room.
 async function renderMap() {
   if (!mapData) {
     try {
@@ -77,26 +86,55 @@ async function renderMap() {
     }
   }
   const tonight = lastTonight;
-  $('map').innerHTML = mapData.wings
-    .map((w) => {
-      const dangerPct = Math.min(100, (w.danger / 1.8) * 100);
-      const lootPct = Math.min(100, (w.loot / 2.2) * 100);
-      const tcolor = TIER_COLOR[w.tier] ?? '#fff';
-      return `<div class="wingrow ${w.id === tonight ? 'tonight' : ''}">
-        <div>
-          <div class="wingname">${esc(w.name)}${w.id === tonight ? '<span class="badge">TONIGHT</span>' : ''}</div>
-          <div class="wingtag">${esc(w.tag)}</div>
-          <div class="wingents">residents: ${esc(w.entities.join(' · '))}</div>
-        </div>
-        <div class="wingrooms">${w.rooms.map((r) => `<span class="roomchip ${r.vote ? 'vote' : ''}">${esc(r.name)}</span>`).join('')}</div>
-        <div class="meters">
-          <div class="mrow"><span class="mlabel">hazard</span><span class="mbar"><i style="width:${dangerPct}%;background:${tcolor}"></i></span><span class="tier" style="color:${tcolor}">${esc(w.tier)}</span></div>
-          <div class="mrow"><span class="mlabel">yield</span><span class="mbar"><i style="width:${lootPct}%;background:var(--green)"></i></span><span class="tier" style="color:var(--green)">×${w.loot.toFixed(2)}</span></div>
-          <div class="mlabel" style="margin-top:4px">◆ blue rooms put a vote on screen</div>
-        </div>
-      </div>`;
-    })
-    .join('');
+  const s = liveState;
+  const W = 900, bandH = 96, padTop = 14, shaftX = 64;
+  const H = padTop * 2 + mapData.wings.length * bandH;
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Facility schematic">`;
+  // depth gradient
+  svg += `<defs><linearGradient id="depth" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#0c0e12"/><stop offset="100%" stop-color="#1a0608"/></linearGradient></defs>`;
+  svg += `<rect x="0" y="0" width="${W}" height="${H}" fill="url(#depth)"/>`;
+  // elevator shaft
+  svg += `<line x1="${shaftX}" y1="${padTop}" x2="${shaftX}" y2="${H - padTop}" stroke="rgba(255,180,84,0.25)" stroke-width="2"/>`;
+
+  mapData.wings.forEach((w, i) => {
+    const y = padTop + i * bandH;
+    const cy = y + bandH / 2;
+    const tcolor = TIER_COLOR[w.tier] ?? '#fff';
+    const isTonight = w.id === tonight;
+
+    // elevator stop
+    svg += `<circle cx="${shaftX}" cy="${cy}" r="4" fill="${isTonight ? '#ffb454' : 'rgba(255,180,84,0.4)'}"/>`;
+    // band
+    svg += `<rect class="wing-band" x="${shaftX + 26}" y="${y + 8}" width="${W - shaftX - 40}" height="${bandH - 16}" rx="5"
+      fill="rgba(0,0,0,0.32)" stroke="${tcolor}" stroke-opacity="${isTonight ? 0.9 : 0.3}" stroke-width="${isTonight ? 2 : 1}"/>`;
+    if (isTonight) {
+      svg += `<rect class="tonight-glow" x="${shaftX + 26}" y="${y + 8}" width="${W - shaftX - 40}" height="${bandH - 16}" rx="5"
+        fill="none" stroke="#ffb454" stroke-width="3"/>`;
+    }
+    // labels
+    svg += `<text class="wing-label" x="${shaftX + 42}" y="${y + 30}">${esc(w.name)}</text>`;
+    svg += `<text class="wing-tier" x="${shaftX + 42}" y="${y + 47}" fill="${tcolor}">HAZARD ${esc(w.tier)} · YIELD ×${w.loot.toFixed(2)}</text>`;
+    if (isTonight) svg += `<text class="wing-tier" x="${shaftX + 42}" y="${y + 64}" fill="#ffb454" font-weight="bold">◀ TONIGHT'S ASSIGNMENT</text>`;
+    else svg += `<text class="wing-tier" x="${shaftX + 42}" y="${y + 64}" fill="rgba(216,211,200,0.4)">${esc(w.entities.join(' · '))}</text>`;
+
+    // room nodes along the right
+    const nodeY = y + bandH / 2;
+    const x0 = shaftX + 360, x1 = W - 60;
+    const gap = w.rooms.length > 1 ? (x1 - x0) / (w.rooms.length - 1) : 0;
+    w.rooms.forEach((r, ri) => {
+      const rx = w.rooms.length > 1 ? x0 + ri * gap : (x0 + x1) / 2;
+      const stroke = r.vote ? '#5fb7ff' : tcolor;
+      // is the live squad here?
+      const here = isTonight && s && s.phase === 'room' && s.route && s.route[s.roomIndex] === r.name;
+      svg += `<circle class="room-node" cx="${rx}" cy="${nodeY}" r="7" fill="rgba(0,0,0,0.5)" stroke="${stroke}" stroke-width="1.5" opacity="${isTonight ? 1 : 0.5}">
+        <title>${esc(r.name)}${r.vote ? ' (vote)' : ''}</title></circle>`;
+      if (here) svg += `<circle class="squad-marker" cx="${rx}" cy="${nodeY}" r="11" fill="none" stroke="#fff" stroke-width="2"/>`;
+    });
+  });
+  svg += `</svg>`;
+  $('map').innerHTML = svg;
 }
 
 // ---------------------------------------------------------------- hall of fame
@@ -121,6 +159,22 @@ function renderHallOfFame(data) {
     .join('');
 }
 
+// ---------------------------------------------------------------- incident log
+function renderIncidents(data) {
+  const list = data?.incidents ?? [];
+  $('incidentcount').textContent = data?.total ? `(${data.total} logged, all-time)` : '';
+  $('incidents').innerHTML =
+    list
+      .map(
+        (i) => `<div class="incident">
+          <div class="who">✖ ${esc(i.display)}</div>
+          <div class="line">${esc(i.line)}${i.by ? ` — ${esc(i.by)}` : ''}</div>
+          <div class="where">${esc([i.wing, i.room].filter(Boolean).join(' · '))} · S${i.season}</div>
+        </div>`,
+      )
+      .join('') || '<p class="muted">No incidents on record. The night is young.</p>';
+}
+
 // ---------------------------------------------------------------- copy to chat
 function copyBtn(text) {
   return `<button class="copy" data-copy="${esc(text)}">⧉ copy</button>`;
@@ -142,12 +196,14 @@ document.addEventListener('click', async (e) => {
 });
 
 async function refreshBoards() {
-  const [board, raids, seasons] = await Promise.all([
+  const [board, raids, seasons, incidents] = await Promise.all([
     fetch('/api/leaderboard').then((r) => r.json()),
     fetch('/api/raids').then((r) => r.json()),
     fetch('/api/seasons').then((r) => r.json()),
+    fetch('/api/incidents').then((r) => r.json()),
   ]);
   renderHallOfFame(seasons);
+  renderIncidents(incidents);
   $('board').querySelector('tbody').innerHTML = board
     .map(
       (p, i) => `<tr>
@@ -240,7 +296,7 @@ function renderPlayer() {
       ${p.stash
         .map(
           (s) => `<tr>
-            <td><span style="color:${rarityColors[s.rarity] ?? '#fff'}">${esc(s.name)}</span>${s.light ? ' 🔦' : ''}<br><span class="flavor">${esc(s.flavor)}</span></td>
+            <td><div class="stash-item">${window.NS_sprite(s.id, s.rarity, 40)}<div><span style="color:${rarityColors[s.rarity] ?? '#fff'}">${esc(s.name)}</span>${s.light ? ' 🔦' : ''}<br><span class="flavor">${esc(s.flavor)}</span></div></div></td>
             <td class="num">${s.qty}</td><td class="num">${s.value}</td>
           </tr>`,
         )
@@ -267,8 +323,26 @@ setInterval(() => {
 const FACILITY_REPLIES = [
   'WE HEAR YOU', 'NOTED', 'FILED', 'THE WALLS REMEMBER THAT', 'SAY IT AGAIN. SLOWER.',
   'THANK YOU FOR YOUR FEEDBACK', 'WHO TOLD YOU THAT', 'YES', 'DO NOT LOOK UP',
-  'THAT INFORMATION IS RESTRICTED', 'YOU ARE DOING GREAT',
+  'THAT INFORMATION IS RESTRICTED', 'YOU ARE DOING GREAT', 'WE SEE THE CURSOR',
+  'STScopHIPLEASE REMAIN SEATED', 'IT IS ALREADY INSIDE', 'WELCOME BACK',
+  'HE IS STILL ON THE NIGHT SHIFT', 'CHECK BEHIND YOU', 'NObody LEAVES PAYROLL',
 ];
+
+// Spontaneous facility interjections — fire on their own, not tied to chat.
+const FACILITY_WHISPERS = [
+  'the night shift never ends',
+  'employee retention is at 100%',
+  'do not acknowledge the thirteenth floor',
+  'your badge has been reassigned',
+  'someone is reading this with you',
+  'the vending machine knows your name',
+  'overtime is mandatory and eternal',
+  'we found your stash. we kept it warm.',
+  'the portrait blinked again',
+  'all exits lead to sublevel 3',
+];
+
+const GLYPHS = '⌀⏃⏚⎔⏥⊠⟁⍜⌬⏧✲⟒☖⏁⌖⍉⋔☍⏛⟆';
 
 function haunt(who, text) {
   const layer = $('ghosts');
@@ -316,5 +390,65 @@ function place(el, layer, near) {
   layer.appendChild(el);
   setTimeout(() => el.remove(), 9500);
 }
+
+// ---------------------------------------------------------------- the shocks
+// Spontaneous spooky activity so the page feels alive even in dead chat.
+function facilityWhisper() {
+  const layer = $('ghosts');
+  if (!layer || layer.children.length > 7) return;
+  const el = document.createElement('div');
+  el.className = 'ghost reply';
+  el.textContent = FACILITY_WHISPERS[Math.floor(Math.random() * FACILITY_WHISPERS.length)];
+  place(el, layer);
+}
+
+// Briefly scramble a random run of visible text into containment glyphs.
+function corruptText() {
+  const candidates = document.querySelectorAll('h2, .wingname, td, .stat span, .incident .who, header h1');
+  if (!candidates.length) return;
+  const pick = [];
+  for (let i = 0; i < 6 + Math.floor(Math.random() * 8); i++) {
+    const el = candidates[Math.floor(Math.random() * candidates.length)];
+    if (el && el.textContent.trim() && !el.dataset.orig) pick.push(el);
+  }
+  pick.forEach((el) => {
+    el.dataset.orig = el.textContent;
+    el.textContent = el.textContent.replace(/\S/g, () => GLYPHS[Math.floor(Math.random() * GLYPHS.length)]);
+    el.classList.add('corrupt');
+  });
+  setTimeout(() => {
+    pick.forEach((el) => {
+      if (el.dataset.orig !== undefined) {
+        el.textContent = el.dataset.orig;
+        delete el.dataset.orig;
+        el.classList.remove('corrupt');
+      }
+    });
+  }, 400 + Math.random() * 500);
+}
+
+function glitchScreen(kind) {
+  const g = $('glitch');
+  g.className = kind;
+  setTimeout(() => (g.className = ''), 650);
+  if (kind === 'flash') {
+    document.body.classList.add('shake');
+    setTimeout(() => document.body.classList.remove('shake'), 420);
+  }
+}
+
+// The disturbance scheduler: small things often, big shocks rarely.
+function scheduleHaunting() {
+  const roll = Math.random();
+  if (roll < 0.45) facilityWhisper();
+  else if (roll < 0.7) glitchScreen('scan');
+  else if (roll < 0.88) corruptText();
+  else {
+    glitchScreen('flash');
+    facilityWhisper();
+  }
+  setTimeout(scheduleHaunting, 6000 + Math.random() * 12000);
+}
+setTimeout(scheduleHaunting, 8000);
 
 init();

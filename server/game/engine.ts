@@ -2,7 +2,7 @@
 // One instance per channel. Ticks at 1Hz, runs the shift (raid) state
 // machine, consumes chat commands, and emits snapshots + one-shot events.
 
-import { ITEM_BY_ID, rollItem, type ItemDef } from './items.js';
+import { ITEM_BY_ID, ITEMS, rollItem, type ItemDef } from './items.js';
 import { pickWing, hazardTier, type RoomDef, type WingDef } from './rooms.js';
 import { beaconLuck, infirmaryShieldChance, collect, upgrade, MODULE_INFO } from './hideout.js';
 import type { HideoutModule } from '../types.js';
@@ -67,11 +67,21 @@ const BRACE_PROMPTS = [
 const LURKER_FEE = 3; // credits for enrolled spectators who join a SEARCH
 
 export interface EngineEvent {
-  type: 'sound' | 'pulse' | 'announce';
+  type: 'sound' | 'pulse' | 'announce' | 'loot';
   sound?: 'health' | 'shield' | 'bomb';
   pulse?: 'death' | 'extract' | 'curse' | 'bless';
   /** Center-screen stinger on the overlay. */
   announce?: { text: string; sub?: string; tone: 'spooky' | 'danger' | 'good' };
+  /** A loot find, for the overlay's sprite-pop layer. */
+  loot?: { display: string; itemId: string; name: string; value: number; rarity: string; bounty?: boolean };
+}
+
+export interface Bounty {
+  itemId: string;
+  name: string;
+  rarity: string;
+  reward: number;
+  claimedBy?: string;
 }
 
 const DEATH_LINES = [
@@ -123,6 +133,8 @@ export class Engine {
   shiftLoot = 1;
   startedAt = 0;
   bombsThisShift = 0; // drives escalating !bomb cost; resets each shift
+  bounty: Bounty | null = null; // tonight's wanted artifact
+  overlayMap = true; // director can hide the overlay mini-map if it's intrusive
   wipeState: { endsAt: number; by: string; bits: number } | null = null;
   private rng: () => number = Math.random;
   onEvent: (ev: EngineEvent) => void = () => {};
@@ -227,9 +239,18 @@ export class Engine {
     this.lastWingId = this.wing.id;
     const deck = [...this.wing.rooms].sort(() => this.rng() - 0.5);
     this.rooms = deck.slice(0, CONFIG.roomsPerShift);
+    this.rollBounty();
     const tier = hazardTier(this.wing.danger);
     this.say('system', `SHIFT #${this.raidId} — doors open. Tonight: ${this.wing.name} (hazard ${tier}). Type !deploy to clock in.`);
     this.announce(`SHIFT #${this.raidId}`, `TONIGHT: ${this.wing.name.toUpperCase()} · HAZARD ${tier} — !deploy TO ENTER`, 'spooky');
+    if (this.bounty) this.say('loot', `★ BOUNTY: extract a ${this.bounty.name} this shift for +${this.bounty.reward}cr.`);
+  }
+
+  /** Pick tonight's wanted artifact — biased toward rares for drama. */
+  private rollBounty(): void {
+    const pool = ITEMS.filter((i) => i.rarity === 'rare' || i.rarity === 'anomalous' || (i.rarity === 'common' && this.rng() < 0.3));
+    const item = pool[Math.floor(this.rng() * pool.length)] ?? ITEMS[0];
+    this.bounty = { itemId: item.id, name: item.name, rarity: item.rarity, reward: Math.round(item.value * 1.5 + 150) };
   }
 
   private beginShift(): void {
@@ -351,8 +372,17 @@ export class Engine {
       player.stats.extractions += 1;
       player.stats.lootValue += r.haul;
       player.stats.bestHaul = Math.max(player.stats.bestHaul, r.haul);
+      // Bounty: first raider to extract the wanted artifact claims the reward.
+      let bountyNote = '';
+      if (this.bounty && !this.bounty.claimedBy && r.loot.some((it) => it.id === this.bounty!.itemId)) {
+        this.bounty.claimedBy = r.display;
+        player.credits += this.bounty.reward;
+        player.stats.bounties += 1;
+        bountyNote = ` ★ +${this.bounty.reward}cr BOUNTY`;
+        this.announce('BOUNTY CLAIMED', `${r.display.toUpperCase()} EXTRACTED THE ${this.bounty.name.toUpperCase()} — +${this.bounty.reward}cr`, 'good');
+      }
       store.markDirty(player.name);
-      this.say('extract', `${r.display} EXTRACTED — haul ${r.haul}cr (+${CONFIG.extractBonus}cr bonus)`);
+      this.say('extract', `${r.display} EXTRACTED — haul ${r.haul}cr (+${CONFIG.extractBonus}cr bonus)${bountyNote}`);
     }
     const out = [...this.raiders.values()].filter((r) => r.alive).length;
     if (out > 0) this.announce('EXTRACTION COMPLETE', `${out} EMPLOYEE(S) RETURNED TO THE SURFACE`, 'good');
@@ -410,6 +440,16 @@ export class Engine {
           player.stats.deaths += 1; // carried light item was removed at deploy — it stays lost
           store.markDirty(player.name);
         }
+        store.addIncident({
+          t: Date.now(),
+          name: r.name,
+          display: r.display,
+          line: r.deathLine,
+          by: ent?.name,
+          wing: this.wing?.name,
+          room: where,
+          season: store.currentSeason(),
+        });
         this.say('death', `✖ ${r.display} ${r.deathLine}. Gear and ${r.haul}cr of loot — gone.`);
         this.onEvent({ type: 'pulse', pulse: 'death' });
         this.announce(`✖ ${r.display}`, r.deathLine.toUpperCase(), 'danger');
@@ -428,7 +468,9 @@ export class Engine {
       const item = rollItem(this.rng, lootFactor * wingLoot * this.shiftLoot * r.luck);
       r.loot.push(item);
       r.haul += item.value;
-      this.say('loot', `${r.display} finds ${item.name} (${item.value}cr)`);
+      const isBounty = this.bounty?.itemId === item.id && !this.bounty.claimedBy;
+      this.say('loot', `${r.display} finds ${item.name} (${item.value}cr)${isBounty ? ' ★ BOUNTY ITEM' : ''}`);
+      this.onEvent({ type: 'loot', loot: { display: r.display, itemId: item.id, name: item.name, value: item.value, rarity: item.rarity, bounty: isBounty } });
     }
   }
 
@@ -663,6 +705,14 @@ export class Engine {
         return true;
       case 'cancelwipe':
         return this.cancelWipe();
+      case 'map': // toggle the overlay mini-map
+        this.overlayMap = !this.overlayMap;
+        return true;
+      case 'rebounty': // reroll tonight's bounty
+        if (this.phase === 'idle') return false;
+        this.rollBounty();
+        if (this.bounty) this.say('loot', `★ BOUNTY reissued: extract a ${this.bounty.name} for +${this.bounty.reward}cr.`);
+        return true;
       default:
         return false;
     }
@@ -686,6 +736,10 @@ export class Engine {
       roomIndex: this.roomIndex,
       roomCount: this.rooms.length,
       room: this.phase === 'room' && room ? { name: room.name, intro: room.intro } : null,
+      // The shift's route, for the overlay mini-map and site map.
+      route: this.phase !== 'idle' ? this.rooms.map((r) => r.name) : [],
+      bounty: this.bounty,
+      overlayMap: this.overlayMap,
       action:
         this.action && this.phase === 'room'
           ? {

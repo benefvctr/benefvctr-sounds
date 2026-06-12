@@ -59,6 +59,12 @@
     <button data-act="curse">Curse the Shift <small>Danger ×1.6 — the Benefactor frowns</small></button>
     <button data-act="bomb">Drop a Charge <small>Danger ×1.4, loot ×1.5 — chaos, on the house</small></button>
 
+    <div class="section">
+      <h2>Overlay & Shift <small id="mapstate"></small></h2>
+      <button data-act="map">Toggle Mini-Map <small>Show/hide the room mini-map on the overlay if it's intrusive</small></button>
+      <button data-act="rebounty">Reroll Bounty <small>Reissue tonight's wanted-artifact bounty</small></button>
+    </div>
+
     <div class="section danger">
       <h2>Danger Zone <small id="curseason">season …</small></h2>
       <button data-act="wipe" id="wipebtn">⚠ Trigger Season Wipe <small>Starts the wipe countdown — same as a 1000-bit cheer. Cancel before it fires.</small></button>
@@ -98,6 +104,7 @@
         el.textContent = `current: ${s.intervalSec === 0 ? 'back-to-back' : s.intervalSec % 60 === 0 ? s.intervalSec / 60 + ' min' : s.intervalSec + 's'} · phase: ${s.phase}`;
         document.getElementById('curseason').textContent =
           `season ${s.season}` + (s.wipe ? ` · WIPING IN ${s.wipe.secondsLeft}s` : '');
+        document.getElementById('mapstate').textContent = `mini-map: ${s.overlayMap ? 'shown' : 'hidden'}`;
       } catch {}
     }
     refreshInterval();

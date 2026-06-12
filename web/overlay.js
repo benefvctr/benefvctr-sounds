@@ -52,6 +52,7 @@ function nextAnnounce() {
 
 function handleEvent(ev) {
   if (ev.type === 'announce' && ev.announce) showAnnounce(ev.announce);
+  if (ev.type === 'loot' && ev.loot) lootPop(ev.loot);
   if (ev.type === 'sound' && SOUNDS[ev.sound]) {
     SOUNDS[ev.sound].currentTime = 0;
     SOUNDS[ev.sound].play().catch(() => {}); // OBS allows autoplay; browsers may not until a click
@@ -67,6 +68,47 @@ function fmt(sec) {
   const m = Math.floor(sec / 60);
   const s = sec % 60;
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+// A found artifact bursts up from the loot layer as its sigil.
+function lootPop(l) {
+  const layer = $('lootlayer');
+  if (layer.children.length > 6) return;
+  const el = document.createElement('div');
+  el.className = 'lootpop' + (l.bounty ? ' bounty' : '');
+  el.style.left = `${12 + Math.random() * 70}%`;
+  const color = window.NS_rarityColor(l.rarity);
+  el.innerHTML =
+    window.NS_sprite(l.itemId, l.rarity, 46, true) +
+    `<div class="ltext">${l.bounty ? '★ ' : ''}${escapeHtml(l.name)}</div>` +
+    `<div class="lval" style="color:${color}">+${l.value}cr</div>`;
+  layer.appendChild(el);
+  setTimeout(() => el.remove(), 2700);
+}
+
+function renderMinimap(s) {
+  const map = $('minimap');
+  if (!s.overlayMap || !s.route || !s.route.length) {
+    map.className = 'hidden';
+    map.innerHTML = '';
+    return;
+  }
+  map.className = '';
+  const anyDead = s.raiders.some((r) => !r.alive);
+  const nodes = [];
+  for (let i = 0; i < s.route.length; i++) {
+    let cls = 'mnode';
+    if (s.phase === 'room' && i === s.roomIndex) cls += ' now';
+    else if (s.phase === 'extraction' || s.phase === 'results' || i < s.roomIndex) cls += ' done';
+    else if (s.phase === 'room' && i < s.roomIndex) cls += ' done';
+    if (cls.includes('done') && anyDead && i <= s.roomIndex) cls += ' dead';
+    nodes.push(`<div class="${cls}" title="${escapeHtml(s.route[i])}">${i + 1}</div>`);
+  }
+  let extCls = 'mnode ext';
+  if (s.phase === 'extraction') extCls += ' now';
+  else if (s.phase === 'results') extCls += ' done';
+  nodes.push(`<div class="${extCls}" title="Extraction">⤒</div>`);
+  map.innerHTML = nodes.join('<div class="mlink"></div>');
 }
 
 function render(s) {
@@ -98,6 +140,18 @@ function render(s) {
   // crude progress bar: refill each phase
   const total = { lobby: 45, room: 24, extraction: 12, results: 18 }[s.phase] ?? 30;
   $('roombar').style.width = `${Math.min(100, (s.secondsLeft / total) * 100)}%`;
+
+  // room mini-map (director can hide it)
+  renderMinimap(s);
+
+  // bounty
+  const bountyEl = $('bounty');
+  bountyEl.classList.toggle('show', !!s.bounty);
+  if (s.bounty) {
+    bountyEl.classList.toggle('claimed', !!s.bounty.claimedBy);
+    $('bname').textContent = s.bounty.name;
+    $('brew').textContent = s.bounty.claimedBy ? `— claimed by ${s.bounty.claimedBy}` : `+${s.bounty.reward}cr`;
+  }
 
   // feed
   const feed = $('feed');

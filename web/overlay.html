@@ -106,6 +106,46 @@
   .chip.shield { box-shadow: 0 0 8px rgba(95,183,255,0.8); border-color: var(--blue); }
   .chip .haul { color: var(--green); margin-left: 6px; }
 
+  /* ---------- room mini-map (status panel) ---------- */
+  #minimap { display: flex; align-items: center; gap: 0; margin-top: 12px; }
+  #minimap.hidden { display: none; }
+  .mnode {
+    flex: 1; height: 24px; display: flex; align-items: center; justify-content: center;
+    border: 1px solid rgba(255,180,84,0.25); border-radius: 3px; font-size: 11px; color: rgba(216,211,200,0.4);
+    position: relative; background: rgba(0,0,0,0.3);
+  }
+  .mlink { width: 10px; height: 2px; background: rgba(255,180,84,0.2); flex-shrink: 0; }
+  .mnode.done { color: var(--amber); border-color: var(--line); }
+  .mnode.done.dead { color: var(--red); border-color: rgba(255,79,79,0.4); }
+  .mnode.now { color: #fff; border-color: var(--amber); box-shadow: 0 0 10px rgba(255,180,84,0.6); animation: blink 1.2s steps(2) infinite; }
+  .mnode.ext { color: var(--green); }
+  .mnode.ext.now { border-color: var(--green); box-shadow: 0 0 10px rgba(109,255,166,0.7); }
+
+  /* ---------- bounty bar ---------- */
+  #bounty { margin-top: 10px; font-size: 12px; letter-spacing: 1px; display: none; align-items: center; gap: 8px; }
+  #bounty.show { display: flex; }
+  #bounty .star { color: var(--amber); }
+  #bounty.claimed { opacity: 0.6; }
+  #bounty .bname { color: #fff; }
+  #bounty .brew { color: var(--green); }
+
+  /* ---------- loot pops ---------- */
+  #lootlayer { position: absolute; left: 0; right: var(--cam-clear); bottom: 230px; height: 200px; pointer-events: none; }
+  .lootpop {
+    position: absolute; bottom: 0; display: flex; flex-direction: column; align-items: center; gap: 2px;
+    animation: lootrise 2.6s ease-out forwards;
+  }
+  .lootpop .ltext { font-size: 12px; letter-spacing: 1px; color: #fff; white-space: nowrap; text-shadow: 0 0 6px #000; }
+  .lootpop .lval { font-size: 11px; }
+  .lootpop.bounty .ltext { color: var(--amber); }
+  @keyframes lootrise {
+    0% { opacity: 0; transform: translateY(20px) scale(0.7); }
+    12% { opacity: 1; transform: translateY(0) scale(1.1); }
+    22% { transform: translateY(-6px) scale(1); }
+    78% { opacity: 1; }
+    100% { opacity: 0; transform: translateY(-90px) scale(0.9); }
+  }
+
   /* ---------- season wipe countdown ---------- */
   #wipebar {
     position: absolute; left: 50%; top: 12%; transform: translateX(-50%);
@@ -217,6 +257,8 @@
       <div class="room" id="roomname"></div>
       <div class="timer" id="timer">--</div>
       <div class="bar"><i id="roombar"></i></div>
+      <div id="minimap"></div>
+      <div id="bounty"><span class="star">★</span><span>BOUNTY</span> <span class="bname" id="bname"></span> <span class="brew" id="brew"></span></div>
     </div>
     <div id="feed" class="panel"></div>
     <div id="squad" class="panel">
@@ -225,6 +267,9 @@
     </div>
   </div>
 
+  <div id="lootlayer"></div>
+
+  <script src="/sprites.js"></script>
   <script src="/overlay.js"></script>
 </body>
 </html>
