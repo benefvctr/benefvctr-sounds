@@ -55,8 +55,8 @@ TWITCH_CHANNEL=yourchannel npm run dev
 | `!collect` | Bank your hideout's passive income |
 | `!upgrade <module>` | Upgrade a hideout module (`generator`/`vault`/`beacon`/`infirmary`) |
 | `!hideout` | Collect and show your hideout summary |
-| `!carry <item\|auto\|none>` | Pick your deploy loadout (the carried item is lost on death) |
-| `!wear <cosmetic\|none>` | Equip drip you've found on shifts |
+| `!carry <item\|auto\|none>` | Pick your deploy loadout — carried items grant their effect and are lost on death |
+| `!wear <cosmetic\|none>` | Equip drip — worn drip deploys with you (buffs apply) and is lost on death too |
 | `!style m` / `!style f` | Retake your employee-file photo (avatar base) |
 
 ## The Hideout (passive income)
@@ -95,6 +95,17 @@ ticks up. The director can trigger or cancel a wipe manually.
 
 Every death is immortalized in a permanent graveyard on the companion site —
 the epitaph, the resident that did it, the wing and room. Built for screenshots.
+
+## Items & buffs
+
+19 field items + 12 cosmetics, all listed with effects in the site's
+**Quartermaster's Catalogue**. Anything equipped (carried item + worn drip)
+deploys with you: buffs apply for the shift, and **everything equipped is lost
+if you die**. Buff types: *safety* (lower hit chance), *guard* (block the first
+hit), *second wind* (auto-cure first wound), *phoenix* (cheat death once),
+*luck* (rarer finds), *find* (more finds), *bonus* (extra extract credits).
+14 field items and 9 cosmetics carry effects; the rest are sell-value or pure
+drip.
 
 ## Employees, drip & player cards
 

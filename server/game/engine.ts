@@ -18,9 +18,14 @@ export interface Raider {
   shield: boolean;
   searching: boolean; // typed the room's SEARCH action: near-sure loot, extra risk
   braced: boolean; // typed BRACE: half hit chance, no loot this room
-  light: number;
-  luck: number; // beacon-boosted loot luck for this shift
+  light: number; // total safety from carried + worn buffs (reduces hit chance)
+  luck: number; // beacon + item luck multipliers for this shift
+  find: number; // additive bonus to loot find chance
+  bonus: number; // extra credits on extraction
+  secondWind: boolean; // auto-cure the first wound (consumed)
+  phoenix: boolean; // cheat death once (consumed)
   lightItemId?: string; // carried from stash; lost on death, returned on extract
+  wornIds: string[]; // worn drip, removed from stash at deploy — same stakes
   look: { gender: 'm' | 'f'; hat?: string; face?: string }; // avatar, frozen at deploy
   loot: ItemDef[];
   haul: number;
@@ -366,10 +371,11 @@ export class Engine {
       if (!r.alive) continue;
       const player = store.getPlayer(r.name);
       if (!player) continue;
-      const payout = r.haul + CONFIG.extractBonus;
+      const payout = r.haul + CONFIG.extractBonus + r.bonus;
       player.credits += payout;
       for (const item of r.loot) player.stash[item.id] = (player.stash[item.id] ?? 0) + 1;
       if (r.lightItemId) player.stash[r.lightItemId] = (player.stash[r.lightItemId] ?? 0) + 1;
+      for (const id of r.wornIds) player.stash[id] = (player.stash[id] ?? 0) + 1; // the drip comes home
       player.stats.extractions += 1;
       player.stats.lootValue += r.haul;
       player.stats.bestHaul = Math.max(player.stats.bestHaul, r.haul);
@@ -383,7 +389,7 @@ export class Engine {
         this.announce('BOUNTY CLAIMED', `${r.display.toUpperCase()} EXTRACTED THE ${this.bounty.name.toUpperCase()} — +${this.bounty.reward}cr`, 'good');
       }
       store.markDirty(player.name);
-      this.say('extract', `${r.display} EXTRACTED — haul ${r.haul}cr (+${CONFIG.extractBonus}cr bonus)${bountyNote}`);
+      this.say('extract', `${r.display} EXTRACTED — haul ${r.haul}cr (+${CONFIG.extractBonus + r.bonus}cr bonus)${bountyNote}`);
     }
     const out = [...this.raiders.values()].filter((r) => r.alive).length;
     if (out > 0) this.announce('EXTRACTION COMPLETE', `${out} EMPLOYEE(S) RETURNED TO THE SURFACE`, 'good');
@@ -427,8 +433,17 @@ export class Engine {
         r.shield = false;
         this.say('danger', `${r.display}'s shield shatters${ent ? ` against ${ent.name}` : ''} in ${where}.`);
       } else if (!r.wounded) {
+        if (r.secondWind) {
+          r.secondWind = false;
+          this.say('info', `${r.display} takes a hit in ${where} — and wolfs down their ration. SECOND WIND. Back up.`);
+          continue;
+        }
         r.wounded = true;
         this.say('danger', `${r.display} is cornered${ent ? ` by ${ent.name}` : ''} in ${where} — WOUNDED. One more hit and it's over.`);
+      } else if (r.phoenix) {
+        r.phoenix = false;
+        this.say('extract', `✦ ${r.display} unfolds the Pocket Door as ${ent ? ent.name : 'the dark'} closes in — and steps through. ALIVE. Barely.`);
+        this.announce(`${r.display} CHEATS DEATH`, 'THE POCKET DOOR OPENS ONCE', 'good');
       } else {
         r.alive = false;
         // Entity-specific epitaphs when the wing has residents; house lines otherwise.
@@ -438,7 +453,12 @@ export class Engine {
             : DEATH_LINES[Math.floor(this.rng() * DEATH_LINES.length)];
         const player = store.getPlayer(r.name);
         if (player) {
-          player.stats.deaths += 1; // carried light item was removed at deploy — it stays lost
+          player.stats.deaths += 1; // carried + worn items were removed at deploy — they stay lost
+          // The drip died with them: unequip whatever no longer exists.
+          for (const id of r.wornIds) {
+            if (player.cosmetics.hat === id) delete player.cosmetics.hat;
+            if (player.cosmetics.face === id) delete player.cosmetics.face;
+          }
           store.markDirty(player.name);
         }
         store.addIncident({
@@ -463,7 +483,7 @@ export class Engine {
     for (const r of this.raiders.values()) {
       if (!r.alive) continue;
       if (r.braced) continue; // heads down, hands empty
-      let chance = Math.min(0.95, Math.max(0.1, 0.5 * lootFactor * wingLoot * this.shiftLoot * (r.wounded ? 0.5 : 1)));
+      let chance = Math.min(0.95, Math.max(0.1, (0.5 + r.find) * lootFactor * wingLoot * this.shiftLoot * (r.wounded ? 0.5 : 1)));
       if (r.searching) chance = Math.max(chance, 0.9);
       if (this.rng() >= chance) continue;
       const item = rollItem(this.rng, lootFactor * wingLoot * this.shiftLoot * r.luck);
@@ -563,10 +583,40 @@ export class Engine {
           p.stash[best.id] -= 1;
           if (p.stash[best.id] <= 0) delete p.stash[best.id];
         }
+        // Aggregate buffs: carried item + worn drip. Everything equipped
+        // leaves the stash for the duration — die and it's all gone.
+        let safety = 0;
+        let luck = beaconLuck(p.hideout);
+        let find = 0;
+        let bonus = 0;
+        let guard = false;
+        let secondWind = false;
+        let phoenix = false;
+        const fold = (b?: { safety?: number; luck?: number; find?: number; bonus?: number; guard?: boolean; secondwind?: boolean; phoenix?: boolean }) => {
+          if (!b) return;
+          safety += b.safety ?? 0;
+          luck *= b.luck ?? 1;
+          find += b.find ?? 0;
+          bonus += b.bonus ?? 0;
+          guard = guard || !!b.guard;
+          secondWind = secondWind || !!b.secondwind;
+          phoenix = phoenix || !!b.phoenix;
+        };
+        fold(best?.carry ?? (best?.light ? { safety: best.light } : undefined));
+        const wornIds: string[] = [];
+        for (const slot of ['hat', 'face'] as const) {
+          const id = p.cosmetics[slot];
+          if (!id || (p.stash[id] ?? 0) <= 0) continue;
+          p.stash[id] -= 1;
+          if (p.stash[id] <= 0) delete p.stash[id];
+          wornIds.push(id);
+          fold(COSMETIC_BY_ID.get(id)?.wear);
+        }
+        safety = Math.min(0.55, safety);
         p.stats.shifts += 1;
         store.markDirty(login);
         // Hideout payoffs: beacon improves loot luck, infirmary may grant a shield.
-        const startShield = this.rng() < infirmaryShieldChance(p.hideout);
+        const startShield = guard || this.rng() < infirmaryShieldChance(p.hideout);
         this.raiders.set(login, {
           name: login,
           display,
@@ -575,14 +625,23 @@ export class Engine {
           shield: startShield,
           searching: false,
           braced: false,
-          light: best?.light ?? 0,
-          luck: beaconLuck(p.hideout),
+          light: safety,
+          luck,
+          find,
+          bonus,
+          secondWind,
+          phoenix,
           lightItemId: best?.id,
+          wornIds,
           look: { gender: p.gender, hat: p.cosmetics.hat, face: p.cosmetics.face },
           loot: [],
           haul: 0,
         });
-        const extras = [best ? `carrying ${best.name}` : 'with no light. Bold.', startShield ? 'Infirmary shield online.' : '']
+        const extras = [
+          best ? `carrying ${best.name}` : 'empty-handed. Bold.',
+          wornIds.length ? `✦ drip equipped (${wornIds.length})` : '',
+          startShield ? '⛨ shielded.' : '',
+        ]
           .filter(Boolean)
           .join(' ');
         this.say('info', `${display} deploys ${extras}`);

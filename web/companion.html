@@ -123,9 +123,18 @@
   .squad-marker { animation: markerpulse 1s ease-in-out infinite; }
   @keyframes markerpulse { 50% { r: 9; opacity: 0.7; } }
 
-  /* ---------- item sprites in stash ---------- */
+  /* ---------- item sprites in stash + catalogue ---------- */
   .stash-item { display: flex; align-items: center; gap: 10px; }
   .stash-item svg { flex-shrink: 0; }
+  .effect { color: var(--green); font-size: 12px; }
+  .stashhead { color: var(--amber); font-size: 12px; letter-spacing: 2px; text-transform: uppercase; margin: 16px 0 8px; }
+  .stashhead .muted { text-transform: none; letter-spacing: 0.5px; }
+  #catalog { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; }
+  .cat-item { display: flex; gap: 10px; border: 1px solid rgba(255,255,255,0.07); border-radius: 4px; padding: 9px; background: rgba(0,0,0,0.25); font-size: 12px; }
+  .cat-item svg { flex-shrink: 0; }
+  .cat-item .cn { color: #fff; }
+  .cat-item .cv { float: right; color: var(--green); }
+  .cat-head { grid-column: 1 / -1; color: var(--amber); font-size: 11px; letter-spacing: 3px; text-transform: uppercase; margin-top: 6px; }
 
   /* ---------- employee portrait + directory ---------- */
   .filehead { display: flex; gap: 16px; align-items: flex-start; margin-top: 14px; }
@@ -248,6 +257,11 @@
     <section class="full" id="hofsection" style="display:none">
       <h2>// Hall of Fame <span class="muted">(champions of wiped seasons — crowns are forever)</span></h2>
       <div id="hof"></div>
+    </section>
+
+    <section class="full">
+      <h2>// Quartermaster's Catalogue <span class="muted" id="catcount"></span></h2>
+      <div id="catalog"></div>
     </section>
 
     <section class="full">

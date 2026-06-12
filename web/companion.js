@@ -15,6 +15,7 @@ async function init() {
   if (cfg.mock) $('livetext').textContent = 'MOCK CHAT';
   connect();
   renderMap();
+  renderCatalog();
   refreshBoards();
   setInterval(refreshBoards, 8000);
 }
@@ -157,6 +158,29 @@ function renderHallOfFame(data) {
       </div>`;
     })
     .join('');
+}
+
+// ---------------------------------------------------------------- catalogue
+async function renderCatalog() {
+  let cat;
+  try {
+    cat = await fetch('/api/catalog').then((r) => r.json());
+  } catch {
+    return;
+  }
+  const order = { anomalous: 0, rare: 1, common: 2, scrap: 3 };
+  const sortFn = (a, b) => order[a.rarity] - order[b.rarity] || b.value - a.value;
+  const entry = (i, drip) => `<div class="cat-item">${window.NS_sprite(i.id, i.rarity, 38)}<div>
+      <span class="cv">${i.value}cr</span>
+      <span class="cn" style="color:${rarityColors[i.rarity] ?? '#fff'}">${esc(i.name)}</span>${drip ? ` <span class="muted">${i.slot}</span>` : ''}<br>
+      ${i.effect ? `<span class="effect">▸ ${esc(i.effect)}</span>` : '<span class="muted">no field effect — sell-value only</span>'}<br>
+      <span class="flavor">${esc(i.flavor)}</span></div></div>`;
+  $('catcount').textContent = `(${cat.items.length} field items · ${cat.cosmetics.length} cosmetics — !carry items, !wear drip; equipped gear is lost on death)`;
+  $('catalog').innerHTML =
+    `<div class="cat-head">Field Items — carry one per shift</div>` +
+    [...cat.items].sort(sortFn).map((i) => entry(i, false)).join('') +
+    `<div class="cat-head">Wardrobe — worn drip rides along (hat + face slots)</div>` +
+    [...cat.cosmetics].sort(sortFn).map((c) => entry(c, true)).join('');
 }
 
 // ---------------------------------------------------------------- directory
@@ -352,21 +376,31 @@ function renderPlayer() {
       </div>
     </div>
 
-    <table style="margin-top:18px"><thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Value</th></tr></thead><tbody>
-      ${p.stash
-        .map((s) => {
-          const isDrip = !!s.slot;
-          const worn = isDrip && (p.cosmetics.hat === s.id || p.cosmetics.face === s.id);
-          const act = isDrip
-            ? `${worn ? '<span style="color:var(--green);font-size:11px">✦ worn</span> ' : ''}${copyBtn(`!wear ${s.id}`)}`
-            : copyBtn(`!carry ${s.id}`);
-          return `<tr>
-            <td><div class="stash-item">${window.NS_sprite(s.id, s.rarity, 40)}<div><span style="color:${rarityColors[s.rarity] ?? '#fff'}">${esc(s.name)}</span>${s.light ? ' 🔦' : ''}${isDrip ? ` <span class="muted">✦ drip · ${s.slot}</span>` : ''}<br><span class="flavor">${esc(s.flavor)}</span></div></div></td>
-            <td class="num">${s.qty}</td><td class="num">${s.value}<br>${act}</td>
-          </tr>`;
-        })
-        .join('') || '<tr><td colspan="3" class="muted">Stash is empty. Deploy and extract.</td></tr>'}
-    </tbody></table>`;
+    ${stashTable('// Field Items', p.stash.filter((s) => !s.slot), p, false)}
+    ${stashTable('// Wardrobe (drip)', p.stash.filter((s) => s.slot), p, true)}`;
+}
+
+function stashTable(title, rows, p, isDrip) {
+  const body = rows
+    .map((s) => {
+      const worn = isDrip && (p.cosmetics.hat === s.id || p.cosmetics.face === s.id);
+      const act = isDrip
+        ? `${worn ? '<span style="color:var(--green);font-size:11px">✦ worn</span> ' : ''}${copyBtn(`!wear ${s.id}`)}`
+        : copyBtn(`!carry ${s.id}`);
+      return `<tr>
+        <td><div class="stash-item">${window.NS_sprite(s.id, s.rarity, 40)}<div>
+          <span style="color:${rarityColors[s.rarity] ?? '#fff'}">${esc(s.name)}</span>${isDrip ? ` <span class="muted">${s.slot}</span>` : ''}
+          ${s.effect ? `<br><span class="effect">▸ ${esc(s.effect)}</span>` : ''}
+          <br><span class="flavor">${esc(s.flavor)}</span></div></div></td>
+        <td class="num">${s.qty}</td><td class="num">${s.value}<br>${act}</td>
+      </tr>`;
+    })
+    .join('');
+  const empty = isDrip
+    ? '<tr><td colspan="3" class="muted">No drip yet — cosmetics drop on shifts.</td></tr>'
+    : '<tr><td colspan="3" class="muted">Stash is empty. Deploy and extract.</td></tr>';
+  return `<h4 class="stashhead">${esc(title)}${isDrip ? ' <span class="muted">worn drip deploys with you — and dies with you</span>' : ' <span class="muted">!carry one into a shift for its effect</span>'}</h4>
+    <table><thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Value</th></tr></thead><tbody>${body || empty}</tbody></table>`;
 }
 
 // Tick the pending-income number upward live, so the hideout feels alive even

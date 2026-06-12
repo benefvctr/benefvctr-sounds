@@ -9,7 +9,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { Engine, CONFIG } from './game/engine.js';
 import { connectTwitch, startMockChat } from './twitch.js';
 import * as store from './store.js';
-import { COSMETIC_BY_ID, ITEM_BY_ID, RARITY_COLOR } from './game/items.js';
+import { COSMETICS, COSMETIC_BY_ID, ITEMS, ITEM_BY_ID, RARITY_COLOR } from './game/items.js';
 import { publicHideout } from './game/hideout.js';
 import { WINGS, hazardTier } from './game/rooms.js';
 
@@ -114,6 +114,7 @@ function publicPlayer(p: store.PlayerRecord) {
       rarity: def?.rarity ?? cos?.rarity ?? 'scrap',
       light: def?.light ?? 0,
       slot: cos?.slot, // present => it's drip
+      effect: def?.carry?.desc ?? cos?.wear?.desc ?? null,
       flavor: def?.flavor ?? cos?.flavor ?? '',
     };
   });
@@ -162,6 +163,13 @@ const server = createServer(async (req, res) => {
   if (path === '/api/raids') return json(res, 200, store.recentRaids());
   if (path === '/api/seasons') return json(res, 200, { season: store.currentSeason(), halloffame: store.recentSeasons() });
   if (path === '/api/incidents') return json(res, 200, { total: store.incidentCount(), incidents: store.recentIncidents(40) });
+  if (path === '/api/catalog') {
+    // The Quartermaster's Catalogue: every item and cosmetic, with effects.
+    return json(res, 200, {
+      items: ITEMS.map((i) => ({ id: i.id, name: i.name, rarity: i.rarity, value: i.value, effect: i.carry?.desc ?? null, flavor: i.flavor })),
+      cosmetics: COSMETICS.map((c) => ({ id: c.id, name: c.name, rarity: c.rarity, slot: c.slot, value: c.value, effect: c.wear?.desc ?? null, flavor: c.flavor })),
+    });
+  }
   if (path === '/api/players') {
     // The employee directory: everyone, lightweight, browsable.
     const dir = store
