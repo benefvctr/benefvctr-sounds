@@ -212,8 +212,13 @@ const server = createServer(async (req, res) => {
   }
   if (path.startsWith('/api/director/') && req.method === 'POST') {
     if (DIRECTOR_KEY && url.searchParams.get('key') !== DIRECTOR_KEY) return json(res, 403, { error: 'bad key' });
+    const action = path.slice('/api/director/'.length);
+    if (action === 'volume') {
+      const ok = engine.setVolume(url.searchParams.get('sound') ?? '', Number(url.searchParams.get('vol')));
+      return json(res, ok ? 200 : 409, { ok });
+    }
     const arg = url.searchParams.has('sec') ? Number(url.searchParams.get('sec')) : undefined;
-    const ok = engine.director(path.slice('/api/director/'.length), arg);
+    const ok = engine.director(action, arg);
     return json(res, ok ? 200 : 409, { ok });
   }
 

@@ -8,8 +8,8 @@ const SOUNDS = {
   shield: new Audio('/sounds/Shield_Charge.wav'),
   bomb: new Audio('/sounds/bomb_dropped.wav'),
 };
-// Alert volume — half by default so the sounds sit under the stream.
-for (const a of Object.values(SOUNDS)) a.volume = 0.5;
+// Alert volume — live-controlled from the director console (see render()).
+for (const a of Object.values(SOUNDS)) a.volume = 0.25;
 
 function connect() {
   // Match the page's protocol: wss:// on HTTPS (Render), ws:// on local http.
@@ -114,6 +114,9 @@ function renderMinimap(s) {
 }
 
 function render(s) {
+  // apply live alert volumes from the director console
+  if (s.volumes) for (const k in s.volumes) if (SOUNDS[k]) SOUNDS[k].volume = s.volumes[k];
+
   const idle = s.phase === 'idle';
   $('idle').classList.toggle('show', idle);
   $('hud').classList.toggle('show', !idle);

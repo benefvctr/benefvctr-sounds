@@ -141,6 +141,7 @@ export class Engine {
   bombsThisShift = 0; // drives escalating !bomb cost; resets each shift
   bounty: Bounty | null = null; // tonight's wanted artifact
   overlayMap = true; // director can hide the overlay mini-map if it's intrusive
+  volumes: Record<'health' | 'shield' | 'bomb', number> = { health: 0.25, shield: 0.25, bomb: 0.25 };
   wipeState: { endsAt: number; by: string; bits: number } | null = null;
   private rng: () => number = Math.random;
   onEvent: (ev: EngineEvent) => void = () => {};
@@ -850,6 +851,14 @@ export class Engine {
     }
   }
 
+  /** Live overlay alert volume, set from the director console. */
+  setVolume(sound: string, vol: number): boolean {
+    if (sound !== 'health' && sound !== 'shield' && sound !== 'bomb') return false;
+    if (!Number.isFinite(vol)) return false;
+    this.volumes[sound] = Math.max(0, Math.min(1, vol));
+    return true;
+  }
+
   // ---------------------------------------------------------------- snapshot
   snapshot() {
     const now = Date.now();
@@ -872,6 +881,7 @@ export class Engine {
       route: this.phase !== 'idle' ? this.rooms.map((r) => r.name) : [],
       bounty: this.bounty,
       overlayMap: this.overlayMap,
+      volumes: this.volumes,
       action:
         this.action && this.phase === 'room'
           ? {
