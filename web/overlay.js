@@ -8,6 +8,8 @@ const SOUNDS = {
   shield: new Audio('/sounds/Shield_Charge.wav'),
   bomb: new Audio('/sounds/bomb_dropped.wav'),
 };
+// Alert volume — half by default so the sounds sit under the stream.
+for (const a of Object.values(SOUNDS)) a.volume = 0.5;
 
 function connect() {
   // Match the page's protocol: wss:// on HTTPS (Render), ws:// on local http.
